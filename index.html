@@ -1501,12 +1501,12 @@
       </div>
 
       <div class="profile-field">
-        <label>ระดับกิจกรรม</label>
+        <label>กิจกรรมพื้นฐานประจำวัน</label>
         <select id="profileActivity">
           <option value="sedentary">นั่งทำงานเป็นหลัก</option>
-          <option value="light">เดินบ้าง / ออกเบา ๆ</option>
-          <option value="moderate">ออกกำลังกาย 3–5 วัน</option>
-          <option value="high">กิจกรรมค่อนข้างหนัก</option>
+          <option value="light">เดินบ้าง / ใช้ชีวิตทั่วไป</option>
+          <option value="moderate">เดินเยอะ / ยืนทำงานบ่อย</option>
+          <option value="high">ใช้แรงค่อนข้างมากในชีวิตประจำวัน</option>
         </select>
       </div>
     </div>
@@ -2651,18 +2651,18 @@ function ensureDashboardState(){
 
 function activityMultiplier(level){
   if(level === "sedentary") return 1.2;
-  if(level === "light") return 1.375;
-  if(level === "moderate") return 1.55;
-  if(level === "high") return 1.725;
-  return 1.375;
+  if(level === "light") return 1.3;
+  if(level === "moderate") return 1.45;
+  if(level === "high") return 1.6;
+  return 1.3;
 }
 
 function activityLabel(level){
   if(level === "sedentary") return "นั่งทำงานเป็นหลัก";
-  if(level === "light") return "เดินบ้าง / ออกเบา ๆ";
-  if(level === "moderate") return "ออกกำลังกาย 3–5 วัน";
-  if(level === "high") return "กิจกรรมค่อนข้างหนัก";
-  return "เดินบ้าง / ออกเบา ๆ";
+  if(level === "light") return "เดินบ้าง / ใช้ชีวิตทั่วไป";
+  if(level === "moderate") return "เดินเยอะ / ยืนทำงานบ่อย";
+  if(level === "high") return "ใช้แรงค่อนข้างมากในชีวิตประจำวัน";
+  return "เดินบ้าง / ใช้ชีวิตทั่วไป";
 }
 
 function calcProfileMetrics(){
@@ -2775,7 +2775,7 @@ function renderProfileCard(){
     TDEE แนะนำ: <b>${m.tdee}</b> kcal/วัน<br>
     โปรตีนแนะนำ: <b>${m.proteinMin}–${m.proteinMax}g</b> / วัน<br>
     เป้าโปรตีนที่เหมาะกับตอนนี้: <b>${m.proteinTarget}g</b> / วัน<br>
-    กิจกรรม: ${activityLabel(m.activityLevel)}
+    กิจกรรมพื้นฐาน: ${activityLabel(m.activityLevel)}
   `;
 }
 
