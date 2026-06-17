@@ -649,6 +649,38 @@
   .kcal-bd-item.burn .num{ color:#8fd19e; }
   .kcal-bd-item.eat .num{ color:#ffb88c; }
 
+  .protein-summary{
+    margin-top:14px;
+    padding-top:14px;
+    border-top:1px solid rgba(255,255,255,0.1);
+  }
+  .protein-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:12px;
+    color:#cfc8bd;
+    margin-bottom:8px;
+  }
+  .protein-row b{
+    color:var(--ember-3);
+    font-family:'DM Mono', monospace;
+    font-size:15px;
+  }
+  .protein-bar{
+    height:8px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.1);
+    overflow:hidden;
+  }
+  .protein-fill{
+    height:100%;
+    width:0%;
+    border-radius:999px;
+    background:linear-gradient(90deg, #8fd19e, var(--ember-3));
+    transition:width .25s ease;
+  }
+
   .kcal-input-card{
     background:var(--card); border:1px solid #e8e1d4;
     border-radius:16px; padding:16px; margin-bottom:14px;
@@ -1086,6 +1118,14 @@
         <div class="lbl">กินเข้าไป</div>
       </div>
     </div>
+
+    <div class="protein-summary">
+      <div class="protein-row">
+        <span>โปรตีนวันนี้</span>
+        <b id="proteinToday">0 / 100g</b>
+      </div>
+      <div class="protein-bar"><div class="protein-fill" id="proteinFill"></div></div>
+    </div>
   </div>
 <div class="kcal-input-card">
   <div class="kcal-input-title ai-title-row">
@@ -1125,10 +1165,19 @@
   </div>
 
   <div class="kcal-input-card">
+    <div class="kcal-input-title">💪 เป้าหมายโปรตีนต่อวัน</div>
+    <div class="base-kcal-row">
+      <input type="number" id="proteinGoalInput" placeholder="เช่น 100">
+      <button id="saveProteinGoalBtn">บันทึก</button>
+    </div>
+  </div>
+
+  <div class="kcal-input-card">
     <div class="kcal-input-title">🍚 กินเข้าไป — เพิ่มรายการอาหาร</div>
     <div class="kcal-input-row">
       <input type="text" class="kcal-name" id="foodLogName" placeholder="เช่น ข้าวมันไก่">
       <input type="number" class="kcal-num" id="foodLogKcal" placeholder="kcal">
+      <input type="number" class="kcal-num" id="foodLogProtein" placeholder="g protein">
       <button id="foodLogAddBtn">+</button>
     </div>
     <div class="kcal-log-list" id="foodLogList"></div>
@@ -1274,6 +1323,7 @@ let state = {
   // kcal tracker: kcalDays = { "2026-06-17": { base:1800, exercise:[{name,kcal}], food:[{name,kcal}] } }
   kcalDays: {},
   aiChatHistory: [],
+  proteinGoal: 100,
 };
 
 let currentUser = null;
@@ -1369,6 +1419,7 @@ function loadState(){
     if(!state.weightMilestones)  state.weightMilestones  = JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
     if(!state.kcalDays)          state.kcalDays          = {};
     if(!state.aiChatHistory)     state.aiChatHistory     = [];
+    if(!state.proteinGoal)       state.proteinGoal       = 100;
     if(state.startWeight == null) state.startWeight = DEFAULT_START_WEIGHT;
     if(state.finalGoal == null)   state.finalGoal   = DEFAULT_FINAL_GOAL;
   }catch(e){
@@ -1377,6 +1428,7 @@ function loadState(){
     state.weightMilestones = JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
     state.kcalDays = {};
     state.aiChatHistory = [];
+    state.proteinGoal = 100;
   }
 }
 function saveState(){
@@ -1837,14 +1889,15 @@ function getDayLog(dateStr){
 
 function dayTotals(dateStr){
   const log = state.kcalDays[dateStr];
-  if(!log) return { base:0, exercise:0, food:0, net:0, hasData:false };
+  if(!log) return { base:0, exercise:0, food:0, protein:0, net:0, hasData:false };
   const exercise = log.exercise.reduce((s,x)=>s+x.kcal,0);
   const food     = log.food.reduce((s,x)=>s+x.kcal,0);
+  const protein  = log.food.reduce((s,x)=>s+(Number(x.protein)||0),0);
   const base     = log.base || 0;
   // net = food eaten - (base used + exercise burned). Negative = deficit (good), positive = surplus.
   const net = food - (base + exercise);
   const hasData = base>0 || log.exercise.length>0 || log.food.length>0;
-  return { base, exercise, food, net, hasData };
+  return { base, exercise, food, protein, net, hasData };
 }
 
 function renderKcalPage(){
@@ -1865,6 +1918,12 @@ function renderKcalPage(){
   document.getElementById('bdBase').textContent     = t.base;
   document.getElementById('bdExercise').textContent = '-'+t.exercise;
   document.getElementById('bdFood').textContent      = '+'+t.food;
+
+  const proteinGoal = state.proteinGoal || 100;
+  const proteinPct = Math.min(100, Math.round((t.protein / proteinGoal) * 100));
+  document.getElementById('proteinToday').textContent = `${Math.round(t.protein)} / ${proteinGoal}g`;
+  document.getElementById('proteinFill').style.width = proteinPct + '%';
+  document.getElementById('proteinGoalInput').value = proteinGoal;
 
   // exercise log list
   const exList = document.getElementById('exerciseLogList');
@@ -1899,7 +1958,7 @@ function renderKcalPage(){
       const row = document.createElement('div');
       row.className = 'kcal-log-item food';
       row.innerHTML = `
-        <div class="name">${item.name}</div>
+        <div class="name">${item.name}${item.protein ? ` · 💪 ${item.protein}g` : ''}</div>
         <div class="amt">+${item.kcal}</div>
         <button class="del" data-idx="${idx}">✕</button>`;
       foodList.appendChild(row);
@@ -2031,8 +2090,9 @@ async function handleAiKcalMessage() {
           : item.name;
 
         if (item.category === "food") {
-          log.food.push({ name: label, kcal });
-          addedText.push(`+${kcal} kcal ${item.name}`);
+          const protein = Math.round(Number(item.protein) || 0);
+          log.food.push({ name: label, kcal, protein });
+          addedText.push(`+${kcal} kcal / ${protein}g protein ${item.name}`);
         }
 
         if (item.category === "exercise") {
@@ -2095,15 +2155,24 @@ document.getElementById('exAddBtn').addEventListener('click', ()=>{
   saveState(); renderKcalPage();
 });
 
+document.getElementById('saveProteinGoalBtn').addEventListener('click', ()=>{
+  const val = parseInt(document.getElementById('proteinGoalInput').value);
+  if(isNaN(val) || val < 0) return;
+  state.proteinGoal = val || 100;
+  saveState(); renderKcalPage();
+});
+
 document.getElementById('foodLogAddBtn').addEventListener('click', ()=>{
   const nameEl = document.getElementById('foodLogName');
   const kcalEl = document.getElementById('foodLogKcal');
+  const proteinEl = document.getElementById('foodLogProtein');
   const name = nameEl.value.trim();
   const kcal = parseInt(kcalEl.value);
+  const protein = parseInt(proteinEl.value) || 0;
   if(!name || isNaN(kcal) || kcal<=0) return;
   const log = getDayLog(todayStr());
-  log.food.push({name, kcal});
-  nameEl.value=''; kcalEl.value='';
+  log.food.push({name, kcal, protein});
+  nameEl.value=''; kcalEl.value=''; proteinEl.value='';
   saveState(); renderKcalPage();
 });
 
