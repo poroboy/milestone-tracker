@@ -976,6 +976,211 @@
     cursor:pointer;
   }
 
+
+  /* ---- Dashboard/Profile ---- */
+  .dashboard-card{
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:16px;
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .dashboard-head-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .dashboard-head-row button{
+    background:#fbf8f2;
+    border:1px solid #e8e1d4;
+    border-radius:9px;
+    width:36px;
+    height:36px;
+    font-size:18px;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .dashboard-year{ font-weight:800; font-size:16px; }
+  .dash-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .dash-stat{
+    background:#fbf8f2;
+    border-radius:12px;
+    padding:12px 10px;
+  }
+  .dash-stat .num{
+    font-family:'DM Mono', monospace;
+    font-size:18px;
+    font-weight:800;
+    line-height:1.2;
+  }
+  .dash-stat .lbl{
+    font-size:10px;
+    color:var(--muted);
+    margin-top:4px;
+    line-height:1.35;
+  }
+  .dash-stat.good .num{ color:var(--moss); }
+  .dash-stat.warn .num{ color:#c9694e; }
+  .dash-section-title{
+    font-size:13px;
+    font-weight:800;
+    margin:4px 0 12px;
+  }
+  .dash-month-list{
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  .dash-month-row{
+    display:grid;
+    grid-template-columns:42px 1fr 72px;
+    gap:8px;
+    align-items:center;
+    font-size:11px;
+  }
+  .dash-month-row .month{
+    font-family:'DM Mono', monospace;
+    color:var(--muted);
+    font-weight:700;
+  }
+  .dash-month-row .value{
+    font-family:'DM Mono', monospace;
+    text-align:right;
+    font-weight:800;
+    font-size:11px;
+  }
+  .dash-month-row .value.good{ color:var(--moss); }
+  .dash-month-row .value.warn{ color:#c9694e; }
+  .dash-bar-track{
+    height:8px;
+    background:#f0e9dc;
+    border-radius:999px;
+    overflow:hidden;
+  }
+  .dash-bar{
+    height:100%;
+    width:0%;
+    border-radius:999px;
+    background:var(--moss);
+  }
+  .dash-bar.warn{ background:#c9694e; }
+  .dash-mini-note{
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.6;
+    margin-top:10px;
+  }
+  .dash-insight{
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:12px;
+    padding:12px;
+    font-size:12px;
+    line-height:1.7;
+    color:var(--ink);
+  }
+  .dash-weight-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .dash-weight-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:10px;
+    padding:9px 12px;
+    font-size:12px;
+  }
+  .dash-weight-row .date{
+    color:var(--muted);
+    font-family:'DM Mono', monospace;
+  }
+  .dash-weight-row .weight{
+    font-family:'DM Mono', monospace;
+    font-weight:800;
+  }
+  .dash-empty{
+    text-align:center;
+    color:var(--muted);
+    font-size:12px;
+    padding:16px 0;
+  }
+  .profile-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:10px;
+  }
+  .profile-field label{
+    display:block;
+    font-size:10px;
+    color:var(--muted);
+    font-family:'DM Mono', monospace;
+    margin-bottom:4px;
+  }
+  .profile-field input,
+  .profile-field select{
+    width:100%;
+    padding:10px;
+    border:1.5px solid #e8e1d4;
+    border-radius:9px;
+    background:#fbf8f2;
+    color:var(--ink);
+    font-family:'Prompt',sans-serif;
+    font-size:13px;
+  }
+  .profile-actions{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+  }
+  .profile-actions button{
+    flex:1;
+    padding:11px 10px;
+    border:none;
+    border-radius:10px;
+    font-family:'Prompt',sans-serif;
+    font-weight:700;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .profile-actions .primary{
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .profile-actions .secondary{
+    background:var(--moss);
+    color:#fff;
+  }
+  .profile-result{
+    margin-top:12px;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:12px;
+    padding:12px;
+    font-size:12px;
+    line-height:1.7;
+  }
+  .profile-result b{ font-family:'DM Mono', monospace; }
+
+  @media (max-width:420px){
+    .profile-grid{ grid-template-columns:1fr; }
+    .profile-actions{ flex-direction:column; }
+    .dash-month-row{
+      grid-template-columns:38px 1fr 64px;
+      gap:7px;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -1262,6 +1467,112 @@
 </div>
 </div>
 
+
+<!-- ====== PAGE: DASHBOARD ====== -->
+<div class="page" id="pageDashboard">
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">ภาพรวมสุขภาพ</p>
+    <h1>Dashboard <span class="accent">ความคืบหน้า</span> 📈</h1>
+  </header>
+
+  <div class="dashboard-card">
+    <div class="dash-section-title">ข้อมูลร่างกายและค่าแนะนำ</div>
+
+    <div class="profile-grid">
+      <div class="profile-field">
+        <label>เพศ</label>
+        <select id="profileGender">
+          <option value="">ไม่ระบุ</option>
+          <option value="female">หญิง</option>
+          <option value="male">ชาย</option>
+        </select>
+      </div>
+
+      <div class="profile-field">
+        <label>อายุ</label>
+        <input type="number" id="profileAge" placeholder="ปี">
+      </div>
+
+      <div class="profile-field">
+        <label>ส่วนสูง</label>
+        <input type="number" id="profileHeight" placeholder="ซม.">
+      </div>
+
+      <div class="profile-field">
+        <label>ระดับกิจกรรม</label>
+        <select id="profileActivity">
+          <option value="sedentary">นั่งทำงานเป็นหลัก</option>
+          <option value="light">เดินบ้าง / ออกเบา ๆ</option>
+          <option value="moderate">ออกกำลังกาย 3–5 วัน</option>
+          <option value="high">กิจกรรมค่อนข้างหนัก</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="profile-actions">
+      <button class="primary" id="saveProfileBtn">บันทึกข้อมูล</button>
+      <button class="secondary" id="applyProfileBtn">ใช้ค่าแนะนำกับวันนี้</button>
+    </div>
+
+    <div class="profile-result" id="profileResult">ใส่ข้อมูลร่างกายเพื่อคำนวณค่าแนะนำ</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-head-row">
+      <button id="dashYearPrevBtn">‹</button>
+      <div class="dashboard-year" id="dashYearLabel">2569</div>
+      <button id="dashYearNextBtn">›</button>
+    </div>
+
+    <div class="dash-grid">
+      <div class="dash-stat" id="dashNetCard">
+        <div class="num" id="dashYearNet">0</div>
+        <div class="lbl">kcal สุทธิทั้งปี</div>
+      </div>
+      <div class="dash-stat">
+        <div class="num" id="dashDaysLogged">0</div>
+        <div class="lbl">วันที่มีการบันทึก</div>
+      </div>
+      <div class="dash-stat">
+        <div class="num" id="dashAvgProtein">0g</div>
+        <div class="lbl">โปรตีนเฉลี่ย/วันที่บันทึก</div>
+      </div>
+      <div class="dash-stat" id="dashWeightCard">
+        <div class="num" id="dashWeightChange">–</div>
+        <div class="lbl">น้ำหนักเปลี่ยนในปีนี้</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dash-section-title">สรุปรายเดือนทั้งปี</div>
+    <div class="dash-month-list" id="dashMonthlyList"></div>
+    <div class="dash-mini-note">แถบสีเขียว = ขาดดุล / สีส้ม = เกินดุล โดยคำนวณจากวันที่มีการบันทึก</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dash-section-title">โปรตีนรายเดือน</div>
+    <div class="dash-month-list" id="dashProteinList"></div>
+    <div class="dash-mini-note">เทียบจากเป้าหมายโปรตีนต่อวันของคุณ</div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dash-section-title">น้ำหนักย้อนหลังในปีนี้</div>
+    <div class="dash-weight-list" id="dashWeightList"></div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dash-section-title">วิเคราะห์ภาพรวม</div>
+    <div class="dash-insight" id="dashInsight">ยังไม่มีข้อมูลพอสำหรับวิเคราะห์</div>
+  </div>
+
+  <div style="height:80px;"></div>
+
+</div>
+</div>
+
 <div class="tabbar">
   <button class="tab active" id="tabHome" onclick="switchTab('Home')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1287,6 +1598,15 @@
     </svg>
     kcal
   </button>
+
+  <button class="tab" id="tabDashboard" onclick="switchTab('Dashboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/>
+      <path d="M7 15l3-3 3 2 5-7"/>
+    </svg>
+    dashboard
+  </button>
+
 </div>
 
 <!-- Celebration overlay -->
@@ -1374,6 +1694,8 @@ let state = {
   kcalDays: {},
   aiChatHistory: [],
   proteinGoal: 100,
+  weightLogs: [],
+  profile: { gender:"", age:"", heightCm:"", activityLevel:"light" },
 };
 
 let currentUser = null;
@@ -1686,6 +2008,7 @@ document.getElementById('logWeightBtn').addEventListener('click', ()=>{
   if(isNaN(val)||val<=0||val>200) return;
   const prev = state.currentWeight;
   state.currentWeight = val;
+  upsertWeightLog(todayStr(), val);
   input.value = '';
   const newlyReached = state.weightMilestones.filter(m=>val<=m.kg && prev>m.kg && !state.reachedWeightMilestones.includes(m.kg));
   newlyReached.forEach(m=>state.reachedWeightMilestones.push(m.kg));
@@ -2313,6 +2636,375 @@ loadState();
 render();
 buildMenuList();
 drawWheel();
+
+// ============================================================
+// DASHBOARD + PROFILE
+// ============================================================
+let dashboardYear = new Date().getFullYear();
+
+function ensureDashboardState(){
+  if(!state.weightLogs) state.weightLogs = [];
+  if(!state.profile) state.profile = { gender:"", age:"", heightCm:"", activityLevel:"light" };
+  if(!state.profile.activityLevel) state.profile.activityLevel = "light";
+  if(!state.proteinGoal) state.proteinGoal = 100;
+}
+
+function activityMultiplier(level){
+  if(level === "sedentary") return 1.2;
+  if(level === "light") return 1.375;
+  if(level === "moderate") return 1.55;
+  if(level === "high") return 1.725;
+  return 1.375;
+}
+
+function activityLabel(level){
+  if(level === "sedentary") return "นั่งทำงานเป็นหลัก";
+  if(level === "light") return "เดินบ้าง / ออกเบา ๆ";
+  if(level === "moderate") return "ออกกำลังกาย 3–5 วัน";
+  if(level === "high") return "กิจกรรมค่อนข้างหนัก";
+  return "เดินบ้าง / ออกเบา ๆ";
+}
+
+function calcProfileMetrics(){
+  ensureDashboardState();
+
+  const p = state.profile;
+  const age = Number(p.age) || 0;
+  const heightCm = Number(p.heightCm) || 0;
+  const weight = Number(state.currentWeight) || 0;
+
+  if(!age || !heightCm || !weight) return null;
+
+  const genderOffset = p.gender === "male" ? 5 : (p.gender === "female" ? -161 : -78);
+  const bmr = Math.round((10 * weight) + (6.25 * heightCm) - (5 * age) + genderOffset);
+  const tdee = Math.round(bmr * activityMultiplier(p.activityLevel));
+
+  const heightM = heightCm / 100;
+  const bmi = Number((weight / (heightM * heightM)).toFixed(1));
+
+  const proteinMin = Math.round(weight * 1.2);
+  const proteinMax = Math.round(weight * (p.activityLevel === "moderate" || p.activityLevel === "high" ? 1.8 : 1.6));
+  const proteinTarget = Math.round(weight * (p.activityLevel === "moderate" || p.activityLevel === "high" ? 1.6 : 1.4));
+
+  return { age, heightCm, weight, bmr, tdee, bmi, proteinMin, proteinMax, proteinTarget, activityLevel:p.activityLevel };
+}
+
+function bmiLabel(bmi){
+  if(!bmi) return "–";
+  if(bmi < 18.5) return "ต่ำกว่าเกณฑ์";
+  if(bmi < 23) return "อยู่ในเกณฑ์ทั่วไป";
+  if(bmi < 25) return "เริ่มสูง";
+  if(bmi < 30) return "สูง";
+  return "สูงมาก";
+}
+
+function upsertWeightLog(dateStr, weight){
+  ensureDashboardState();
+
+  const existing = state.weightLogs.find(x => x.date === dateStr);
+  if(existing){
+    existing.weight = weight;
+  }else{
+    state.weightLogs.push({ date: dateStr, weight });
+  }
+
+  state.weightLogs.sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+function saveProfileFromInputs(){
+  ensureDashboardState();
+
+  state.profile = {
+    gender: document.getElementById("profileGender").value,
+    age: document.getElementById("profileAge").value,
+    heightCm: document.getElementById("profileHeight").value,
+    activityLevel: document.getElementById("profileActivity").value || "light"
+  };
+
+  saveState();
+  renderDashboard();
+}
+
+function applyProfileSuggestions(){
+  ensureDashboardState();
+
+  const m = calcProfileMetrics();
+  if(!m){
+    alert("กรุณาใส่อายุ ส่วนสูง และบันทึกน้ำหนักปัจจุบันก่อน");
+    return;
+  }
+
+  state.proteinGoal = m.proteinTarget;
+
+  const log = getDayLog(todayStr());
+  log.base = m.tdee;
+
+  saveState();
+
+  if(document.getElementById("pageKcal")?.classList.contains("active")){
+    renderKcalPage();
+  }
+
+  renderDashboard();
+  alert("ใช้ค่าแนะนำแล้ว: TDEE " + m.tdee + " kcal และโปรตีน " + m.proteinTarget + "g ต่อวัน");
+}
+
+function renderProfileCard(){
+  ensureDashboardState();
+
+  const genderEl = document.getElementById("profileGender");
+  if(!genderEl) return;
+
+  const p = state.profile;
+  genderEl.value = p.gender || "";
+  document.getElementById("profileAge").value = p.age || "";
+  document.getElementById("profileHeight").value = p.heightCm || "";
+  document.getElementById("profileActivity").value = p.activityLevel || "light";
+
+  const result = document.getElementById("profileResult");
+  const m = calcProfileMetrics();
+
+  if(!m){
+    result.innerHTML = "ใส่เพศ อายุ ส่วนสูง และบันทึกน้ำหนักปัจจุบัน เพื่อคำนวณค่าแนะนำ";
+    return;
+  }
+
+  result.innerHTML = `
+    BMI: <b>${m.bmi}</b> (${bmiLabel(m.bmi)})<br>
+    BMR โดยประมาณ: <b>${m.bmr}</b> kcal/วัน<br>
+    TDEE แนะนำ: <b>${m.tdee}</b> kcal/วัน<br>
+    โปรตีนแนะนำ: <b>${m.proteinMin}–${m.proteinMax}g</b> / วัน<br>
+    เป้าโปรตีนที่เหมาะกับตอนนี้: <b>${m.proteinTarget}g</b> / วัน<br>
+    กิจกรรม: ${activityLabel(m.activityLevel)}
+  `;
+}
+
+function monthMetrics(year, month){
+  let totalNet = 0;
+  let totalProtein = 0;
+  let daysLogged = 0;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const t = dayTotals(dateStr);
+
+    if(t.hasData){
+      totalNet += t.net || 0;
+      totalProtein += t.protein || 0;
+      daysLogged++;
+    }
+  }
+
+  return {
+    year,
+    month,
+    daysLogged,
+    totalNet,
+    totalProtein,
+    avgNet: daysLogged ? Math.round(totalNet / daysLogged) : 0,
+    avgProtein: daysLogged ? Math.round(totalProtein / daysLogged) : 0
+  };
+}
+
+function yearMetrics(year){
+  ensureDashboardState();
+
+  const months = [];
+  let totalNet = 0;
+  let totalProtein = 0;
+  let daysLogged = 0;
+
+  for(let m=0; m<12; m++){
+    const mm = monthMetrics(year, m);
+    months.push(mm);
+    totalNet += mm.totalNet;
+    totalProtein += mm.totalProtein;
+    daysLogged += mm.daysLogged;
+  }
+
+  const weights = state.weightLogs
+    .filter(x => x.date && x.date.startsWith(String(year) + "-"))
+    .slice()
+    .sort((a,b)=>a.date.localeCompare(b.date));
+
+  const firstWeight = weights.length ? Number(weights[0].weight) : null;
+  const lastWeight = weights.length ? Number(weights[weights.length - 1].weight) : null;
+  const weightChange = firstWeight != null && lastWeight != null ? Number((lastWeight - firstWeight).toFixed(1)) : null;
+
+  return {
+    year,
+    months,
+    totalNet,
+    totalProtein,
+    daysLogged,
+    avgNet: daysLogged ? Math.round(totalNet / daysLogged) : 0,
+    avgProtein: daysLogged ? Math.round(totalProtein / daysLogged) : 0,
+    weights,
+    weightChange
+  };
+}
+
+function renderDashboard(){
+  ensureDashboardState();
+  renderProfileCard();
+
+  const ym = yearMetrics(dashboardYear);
+  const proteinGoal = state.proteinGoal || 100;
+
+  document.getElementById("dashYearLabel").textContent = dashboardYear + 543;
+
+  const netCard = document.getElementById("dashNetCard");
+  netCard.className = "dash-stat " + (ym.totalNet <= 0 ? "good" : "warn");
+
+  document.getElementById("dashYearNet").textContent = (ym.totalNet > 0 ? "+" : "") + ym.totalNet;
+  document.getElementById("dashDaysLogged").textContent = ym.daysLogged;
+  document.getElementById("dashAvgProtein").textContent = ym.avgProtein + "g";
+
+  const weightCard = document.getElementById("dashWeightCard");
+  if(ym.weightChange == null){
+    document.getElementById("dashWeightChange").textContent = "–";
+    weightCard.className = "dash-stat";
+  }else{
+    document.getElementById("dashWeightChange").textContent = (ym.weightChange > 0 ? "+" : "") + ym.weightChange + " kg";
+    weightCard.className = "dash-stat " + (ym.weightChange <= 0 ? "good" : "warn");
+  }
+
+  renderDashboardMonthly(ym);
+  renderDashboardProtein(ym, proteinGoal);
+  renderDashboardWeights(ym);
+  renderDashboardInsight(ym, proteinGoal);
+}
+
+function renderDashboardMonthly(ym){
+  const list = document.getElementById("dashMonthlyList");
+  list.innerHTML = "";
+
+  const maxAbs = Math.max(1, ...ym.months.map(m => Math.abs(m.totalNet)));
+
+  ym.months.forEach(m => {
+    const pct = Math.min(100, Math.round(Math.abs(m.totalNet) / maxAbs * 100));
+    const good = m.totalNet <= 0;
+
+    const row = document.createElement("div");
+    row.className = "dash-month-row";
+    row.innerHTML = `
+      <div class="month">${thaiMonths[m.month].slice(0,3)}</div>
+      <div class="dash-bar-track"><div class="dash-bar ${good ? "" : "warn"}" style="width:${pct}%;"></div></div>
+      <div class="value ${good ? "good" : "warn"}">${m.daysLogged ? ((m.totalNet>0?"+":"") + m.totalNet) : "–"}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderDashboardProtein(ym, proteinGoal){
+  const list = document.getElementById("dashProteinList");
+  list.innerHTML = "";
+
+  ym.months.forEach(m => {
+    const pct = Math.min(100, Math.round((m.avgProtein / proteinGoal) * 100));
+    const good = m.avgProtein >= proteinGoal * 0.8;
+
+    const row = document.createElement("div");
+    row.className = "dash-month-row";
+    row.innerHTML = `
+      <div class="month">${thaiMonths[m.month].slice(0,3)}</div>
+      <div class="dash-bar-track"><div class="dash-bar ${good ? "" : "warn"}" style="width:${pct}%;"></div></div>
+      <div class="value ${good ? "good" : "warn"}">${m.daysLogged ? (m.avgProtein + "g") : "–"}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderDashboardWeights(ym){
+  const list = document.getElementById("dashWeightList");
+  list.innerHTML = "";
+
+  if(!ym.weights.length){
+    list.innerHTML = '<div class="dash-empty">ยังไม่มีประวัติน้ำหนักในปีนี้</div>';
+    return;
+  }
+
+  ym.weights.slice(-12).reverse().forEach(w => {
+    const row = document.createElement("div");
+    row.className = "dash-weight-row";
+    row.innerHTML = `
+      <div class="date">${w.date}</div>
+      <div class="weight">${Number(w.weight).toFixed(1)} kg</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderDashboardInsight(ym, proteinGoal){
+  const el = document.getElementById("dashInsight");
+
+  if(ym.daysLogged < 3){
+    el.textContent = "ยังมีข้อมูลไม่พอสำหรับวิเคราะห์ภาพรวม แนะนำให้บันทึก kcal โปรตีน และน้ำหนักอย่างน้อย 3–7 วันก่อน";
+    return;
+  }
+
+  const lines = [];
+  const profileMetrics = calcProfileMetrics();
+
+  if(profileMetrics){
+    lines.push(`จากข้อมูลร่างกาย ค่า TDEE แนะนำอยู่ที่ประมาณ ${profileMetrics.tdee} kcal/วัน และเป้าโปรตีนเหมาะกับตอนนี้ประมาณ ${profileMetrics.proteinTarget}g/วัน`);
+  }
+
+  if(ym.avgNet < -700){
+    lines.push("kcal เฉลี่ยขาดดุลค่อนข้างมาก อาจลดเร็วแต่ควรระวังหิวจัดหรือหลุดง่าย");
+  }else if(ym.avgNet < -250){
+    lines.push("kcal เฉลี่ยอยู่ในโซนขาดดุลกำลังดี เหมาะกับการลดน้ำหนักแบบค่อยเป็นค่อยไป");
+  }else if(ym.avgNet <= 150){
+    lines.push("kcal เฉลี่ยใกล้สมดุล น้ำหนักอาจลงช้า ถ้าอยากลดชัดขึ้นอาจเพิ่มกิจกรรมหรือคุมมื้อเย็นเล็กน้อย");
+  }else{
+    lines.push("kcal เฉลี่ยมีแนวโน้มเกินดุล ถ้าเป้าหมายคือลดน้ำหนัก ควรลดอาหารพลังงานสูงหรือเพิ่มการเคลื่อนไหว");
+  }
+
+  if(ym.avgProtein < proteinGoal * 0.6){
+    lines.push("โปรตีนเฉลี่ยยังต่ำกว่าเป้าค่อนข้างมาก ควรเพิ่มโปรตีนในทุกมื้อ");
+  }else if(ym.avgProtein < proteinGoal * 0.85){
+    lines.push("โปรตีนยังต่ำกว่าเป้าบ้าง ถ้าเพิ่มอีกนิดจะช่วยให้อิ่มนานและรักษามวลกล้ามเนื้อได้ดีขึ้น");
+  }else{
+    lines.push("โปรตีนเฉลี่ยทำได้ดี ช่วยสนับสนุนการลดน้ำหนักและรักษากล้ามเนื้อ");
+  }
+
+  if(ym.weightChange != null){
+    if(ym.weightChange < -0.5){
+      lines.push(`น้ำหนักในปีนี้ลดลงประมาณ ${Math.abs(ym.weightChange).toFixed(1)} kg ถือว่ามี progress แล้ว`);
+    }else if(ym.weightChange > 0.5){
+      lines.push(`น้ำหนักเพิ่มขึ้นประมาณ ${ym.weightChange.toFixed(1)} kg ควรดูร่วมกับ kcal เฉลี่ยและความสม่ำเสมอในการบันทึก`);
+    }else{
+      lines.push("น้ำหนักยังค่อนข้างทรงตัว อาจต้องสะสมข้อมูลเพิ่มหรือปรับ deficit ให้ชัดขึ้น");
+    }
+  }else{
+    lines.push("ยังไม่มีข้อมูลน้ำหนักย้อนหลังพอ แนะนำบันทึกน้ำหนัก 1–3 ครั้งต่อสัปดาห์");
+  }
+
+  el.innerHTML = lines.map(x => `• ${x}`).join("<br>");
+}
+
+const __oldSwitchTabForDashboard = switchTab;
+switchTab = function(name){
+  __oldSwitchTabForDashboard(name);
+  if(name === "Dashboard") renderDashboard();
+};
+
+setTimeout(() => {
+  document.getElementById("dashYearPrevBtn")?.addEventListener("click", () => {
+    dashboardYear--;
+    renderDashboard();
+  });
+
+  document.getElementById("dashYearNextBtn")?.addEventListener("click", () => {
+    dashboardYear++;
+    renderDashboard();
+  });
+
+  document.getElementById("saveProfileBtn")?.addEventListener("click", saveProfileFromInputs);
+  document.getElementById("applyProfileBtn")?.addEventListener("click", applyProfileSuggestions);
+}, 0);
+
 </script>
 
 
