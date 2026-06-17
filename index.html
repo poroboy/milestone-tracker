@@ -1263,7 +1263,7 @@ async function loadCloudState(user) {
 
       console.log("Cloud state loaded");
     } else {
-      await saveCloudStateNow();
+      await saveCloudStateNow(true);
       console.log("No cloud state found. Local state uploaded.");
     }
   } catch (err) {
@@ -1273,8 +1273,8 @@ async function loadCloudState(user) {
   }
 }
 
-async function saveCloudStateNow() {
-  if (!currentUser || isCloudLoading) return;
+async function saveCloudStateNow(force = false) {
+  if (!currentUser || (isCloudLoading && !force)) return;
 
   try {
     const ref = getTrackerDocRef();
