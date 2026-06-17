@@ -698,6 +698,32 @@
   .kcal-input-row input:focus{ outline:2px solid var(--ember-2); border-color:transparent; }
   .kcal-input-row .kcal-num{ width:90px; font-family:'DM Mono',monospace; text-align:center; }
   .kcal-input-row .kcal-name{ flex:1; }
+
+  .food-log-row{
+    display:grid;
+    grid-template-columns:1fr 86px 86px 44px;
+    gap:8px;
+    align-items:center;
+  }
+  .food-log-row .kcal-name,
+  .food-log-row .kcal-num{
+    width:100%;
+    min-width:0;
+  }
+  .food-log-row button{
+    width:44px;
+    height:42px;
+    padding:0;
+  }
+
+  @media (max-width:420px){
+    .food-log-row{
+      grid-template-columns:1fr 1fr 44px;
+    }
+    .food-log-row .kcal-name{
+      grid-column:1 / -1;
+    }
+  }
   .kcal-input-row button{
     padding:10px 14px; border:none; border-radius:8px;
     background:var(--moss); color:#fff;
@@ -1174,10 +1200,10 @@
 
   <div class="kcal-input-card">
     <div class="kcal-input-title">🍚 กินเข้าไป — เพิ่มรายการอาหาร</div>
-    <div class="kcal-input-row">
+    <div class="kcal-input-row food-log-row">
       <input type="text" class="kcal-name" id="foodLogName" placeholder="เช่น ข้าวมันไก่">
       <input type="number" class="kcal-num" id="foodLogKcal" placeholder="kcal">
-      <input type="number" class="kcal-num" id="foodLogProtein" placeholder="g protein">
+      <input type="number" class="kcal-num" id="foodLogProtein" placeholder="protein g">
       <button id="foodLogAddBtn">+</button>
     </div>
     <div class="kcal-log-list" id="foodLogList"></div>
