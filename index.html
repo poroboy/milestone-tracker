@@ -703,6 +703,41 @@
   .kcal-empty{
     text-align:center; color:var(--muted); font-size:12px; padding:14px 0;
   }
+  .ai-chat-history{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:10px;
+    max-height:260px;
+    overflow:auto;
+    padding-right:2px;
+  }
+  .ai-msg{
+    padding:10px 12px;
+    border-radius:12px;
+    font-size:12px;
+    line-height:1.55;
+    white-space:pre-wrap;
+  }
+  .ai-msg.user{
+    align-self:flex-end;
+    max-width:88%;
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .ai-msg.ai{
+    align-self:flex-start;
+    max-width:92%;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    color:var(--ink);
+  }
+  .ai-msg .ai-meta{
+    margin-top:6px;
+    font-family:'DM Mono', monospace;
+    font-size:10px;
+    color:var(--muted);
+  }
 
   /* Month nav */
   .month-nav{
@@ -1037,7 +1072,7 @@
     </div>
   </div>
 <div class="kcal-input-card">
-  <div class="kcal-input-title">🤖 AI kcal chat</div>
+  <div class="kcal-input-title">🤖 คุยกับ AI สุขภาพ</div>
   <div class="kcal-input-row">
     <input
       type="text"
@@ -1047,8 +1082,9 @@
     >
     <button id="aiKcalSendBtn">ส่ง</button>
   </div>
+  <div id="aiChatHistory" class="ai-chat-history"></div>
   <div id="aiKcalReply" class="kcal-empty">
-    พิมพ์สิ่งที่กินหรือออกกำลังกายได้เลย
+    ถามเรื่องอาหาร ออกกำลังกาย หรือบันทึกสิ่งที่กินได้เลย
   </div>
 </div>
   <div class="kcal-input-card">
@@ -1218,6 +1254,7 @@ let state = {
   foods: null, // null = use defaults
   // kcal tracker: kcalDays = { "2026-06-17": { base:1800, exercise:[{name,kcal}], food:[{name,kcal}] } }
   kcalDays: {},
+  aiChatHistory: [],
 };
 
 let currentUser = null;
@@ -1312,6 +1349,7 @@ function loadState(){
     if(!state.foods)             state.foods             = [...DEFAULT_FOODS];
     if(!state.weightMilestones)  state.weightMilestones  = JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
     if(!state.kcalDays)          state.kcalDays          = {};
+    if(!state.aiChatHistory)     state.aiChatHistory     = [];
     if(state.startWeight == null) state.startWeight = DEFAULT_START_WEIGHT;
     if(state.finalGoal == null)   state.finalGoal   = DEFAULT_FINAL_GOAL;
   }catch(e){
@@ -1319,6 +1357,7 @@ function loadState(){
     state.foods = [...DEFAULT_FOODS];
     state.weightMilestones = JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
     state.kcalDays = {};
+    state.aiChatHistory = [];
   }
 }
 function saveState(){
@@ -1854,9 +1893,44 @@ function renderKcalPage(){
     });
   }
 
+  if (document.getElementById("aiChatHistory")) renderAiChatHistory();
   renderMonthSummary();
 }
 const AI_KCAL_WORKER_URL = "https://milestone-kcal-ai.poroboy.workers.dev";
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderAiChatHistory() {
+  const box = document.getElementById("aiChatHistory");
+  if (!box) return;
+
+  const history = state.aiChatHistory || [];
+  box.innerHTML = "";
+
+  if (history.length === 0) return;
+
+  history.slice(-12).forEach(msg => {
+    const div = document.createElement("div");
+    div.className = "ai-msg " + (msg.role === "user" ? "user" : "ai");
+
+    let meta = "";
+    if (msg.added && msg.added.length) {
+      meta = `<div class="ai-meta">บันทึก: ${escapeHtml(msg.added.join(", "))}</div>`;
+    }
+
+    div.innerHTML = `${escapeHtml(msg.text)}${meta}`;
+    box.appendChild(div);
+  });
+
+  box.scrollTop = box.scrollHeight;
+}
 
 async function handleAiKcalMessage() {
   const input = document.getElementById("aiKcalMessage");
@@ -1866,10 +1940,26 @@ async function handleAiKcalMessage() {
   const message = input.value.trim();
   if (!message) return;
 
-  reply.textContent = "กำลังประเมิน kcal...";
+  if (!state.aiChatHistory) state.aiChatHistory = [];
+
+  state.aiChatHistory.push({
+    role: "user",
+    text: message,
+    ts: Date.now()
+  });
+
+  state.aiChatHistory = state.aiChatHistory.slice(-40);
+  input.value = "";
+  reply.textContent = "AI กำลังคิดให้...";
   sendBtn.disabled = true;
+  renderAiChatHistory();
+  saveState();
 
   try {
+    const today = todayStr();
+    const log = getDayLog(today);
+    const totals = dayTotals(today);
+
     const res = await fetch(AI_KCAL_WORKER_URL, {
       method: "POST",
       headers: {
@@ -1877,7 +1967,10 @@ async function handleAiKcalMessage() {
       },
       body: JSON.stringify({
         message,
-        currentWeight: state.currentWeight || null
+        currentWeight: state.currentWeight || null,
+        todaySummary: totals,
+        todayLog: log,
+        chatHistory: state.aiChatHistory.slice(-8)
       })
     });
 
@@ -1887,9 +1980,6 @@ async function handleAiKcalMessage() {
       console.error(data);
       throw new Error(data.error || "AI request failed");
     }
-
-    const today = todayStr();
-    const log = getDayLog(today);
 
     let addedText = [];
 
@@ -1903,32 +1993,45 @@ async function handleAiKcalMessage() {
           : item.name;
 
         if (item.category === "food") {
-          log.food.push({
-            name: label,
-            kcal
-          });
+          log.food.push({ name: label, kcal });
           addedText.push(`+${kcal} kcal ${item.name}`);
         }
 
         if (item.category === "exercise") {
-          log.exercise.push({
-            name: label,
-            kcal
-          });
+          log.exercise.push({ name: label, kcal });
           addedText.push(`-${kcal} kcal ${item.name}`);
         }
       });
     }
 
-    input.value = "";
+    state.aiChatHistory.push({
+      role: "ai",
+      text: data.reply || "เรียบร้อยครับ",
+      added: addedText,
+      mode: data.mode || "chat",
+      ts: Date.now()
+    });
+
+    state.aiChatHistory = state.aiChatHistory.slice(-40);
+
+    reply.textContent = addedText.length
+      ? "เพิ่มข้อมูลให้แล้ว"
+      : "ตอบกลับแล้ว";
+
     saveState();
     renderKcalPage();
-
-    reply.textContent = data.reply || `เพิ่มให้แล้ว: ${addedText.join(", ")}`;
   } catch (err) {
     console.error(err);
-    reply.textContent =
-      "ยังประเมินไม่ได้ ลองพิมพ์ให้ชัดขึ้น เช่น กินข้าวมันไก่ 1 จาน หรือ Cardio 20 นาที";
+
+    state.aiChatHistory.push({
+      role: "ai",
+      text: "ขอโทษครับ ตอนนี้ AI ยังตอบไม่ได้ ลองพิมพ์ใหม่ให้ชัดขึ้นอีกนิดนะครับ",
+      ts: Date.now()
+    });
+
+    reply.textContent = "AI ยังตอบไม่ได้ ลองใหม่อีกครั้ง";
+    saveState();
+    renderAiChatHistory();
   } finally {
     sendBtn.disabled = false;
   }
