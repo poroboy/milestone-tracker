@@ -1,0 +1,1964 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เส้นทางสู่เป้าหมาย</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+  :root{
+    --ink:#1b1f24;
+    --paper:#fdf6ec;
+    --line:#2c2c2c;
+    --ember-1:#ff7a45;
+    --ember-2:#ffb347;
+    --ember-3:#ffe066;
+    --moss:#4f7a5c;
+    --moss-bg:#e4ede2;
+    --plum:#7a5980;
+    --plum-bg:#f0e6f3;
+    --muted:#8a8378;
+    --card:#ffffff;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;}
+  body{
+    font-family:'Prompt',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    padding:24px 16px 60px;
+    background-image:
+      radial-gradient(circle at 10% 5%, rgba(255,122,69,0.06), transparent 35%),
+      radial-gradient(circle at 90% 80%, rgba(79,122,92,0.05), transparent 40%);
+  }
+  .wrap{max-width:480px; margin:0 auto;}
+
+  /* Header */
+  header{margin-bottom:20px;}
+  .eyebrow{
+    font-family:'DM Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 4px;
+  }
+  h1{
+    font-size:28px;
+    font-weight:800;
+    margin:0;
+    line-height:1.2;
+  }
+  .accent{color:var(--ember-1);}
+
+  /* Streak hero */
+  .streak-card{
+    background:var(--ink);
+    color:var(--paper);
+    border-radius:20px;
+    padding:24px 20px;
+    margin:20px 0;
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 8px 24px rgba(0,0,0,0.18);
+  }
+  .streak-top{
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .streak-num-row{
+    display:flex; align-items:flex-end; gap:8px;
+  }
+  .flame{
+    width:46px; height:46px;
+    filter:drop-shadow(0 0 6px rgba(255,150,50,0.5));
+    transition:transform .25s ease;
+  }
+  .flame.lit{ animation:flicker 1.8s ease-in-out infinite; }
+  @keyframes flicker{
+    0%,100%{ transform:scale(1) rotate(-1deg); }
+    50%{ transform:scale(1.06) rotate(1deg); }
+  }
+  .streak-number{
+    font-size:48px; font-weight:800; line-height:1;
+    font-family:'DM Mono', monospace;
+  }
+  .streak-label{
+    font-size:13px; color:#cfc8bd; margin-top:2px;
+  }
+  .streak-best{
+    text-align:right; font-size:12px; color:#cfc8bd;
+    font-family:'DM Mono', monospace;
+  }
+  .streak-best b{ color:var(--ember-3); font-size:16px; display:block; }
+
+  .week-row{
+    display:flex; justify-content:space-between; margin-top:18px; gap:6px;
+  }
+  .day-pill{
+    flex:1; aspect-ratio:1; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:600;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.08);
+    color:#9c958a;
+    position:relative;
+  }
+  .day-pill.done{
+    background:linear-gradient(145deg, var(--ember-2), var(--ember-1));
+    color:#2a1100;
+    border:none;
+  }
+  .day-pill.today{
+    box-shadow:0 0 0 2px var(--ember-3);
+  }
+
+  .checkin-btn{
+    width:100%; margin-top:18px;
+    padding:14px;
+    border:none; border-radius:12px;
+    font-family:'Prompt',sans-serif;
+    font-weight:700; font-size:15px;
+    background:var(--ember-1);
+    color:#2a1100;
+    cursor:pointer;
+    transition:transform .1s ease, opacity .2s ease;
+  }
+  .checkin-btn:active{ transform:scale(0.98); }
+  .checkin-btn.done{
+    background:rgba(255,255,255,0.08);
+    color:#cfc8bd;
+    border:1px solid rgba(255,255,255,0.15);
+  }
+
+  .undo-btn{
+    width:100%; margin-top:8px;
+    padding:10px;
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:10px;
+    font-family:'Prompt',sans-serif;
+    font-weight:500; font-size:12px;
+    background:transparent;
+    color:#9c958a;
+    cursor:pointer;
+    display:none;
+  }
+  .undo-btn.visible{ display:block; }
+  .undo-btn:active{ opacity:0.6; }
+
+  /* Streak milestone chips */
+  .streak-chips{
+    display:flex; flex-direction:column; gap:6px; margin-top:14px;
+  }
+  .chip{
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    padding:8px 10px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.06);
+    color:#cfc8bd;
+    border:1px solid rgba(255,255,255,0.1);
+    line-height:1.5;
+  }
+  .chip.reached{
+    background:rgba(255,224,102,0.15);
+    color:var(--ember-3);
+    border-color:rgba(255,224,102,0.3);
+  }
+
+  /* Weight section */
+  .section-title{
+    font-size:13px; font-weight:700;
+    color:var(--muted);
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    margin:28px 0 12px;
+    font-family:'DM Mono', monospace;
+  }
+
+  .weight-card{
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:16px;
+    padding:18px;
+  }
+  .weight-row{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .weight-now{
+    font-size:36px; font-weight:800; font-family:'DM Mono', monospace;
+  }
+  .weight-now span{ font-size:16px; font-weight:500; color:var(--muted); }
+  .weight-goal{
+    text-align:right; font-size:12px; color:var(--muted);
+  }
+  .weight-goal b{ color:var(--ink); font-size:14px; }
+
+  .input-row{
+    display:flex; gap:8px; margin-bottom:16px;
+  }
+  .input-row input{
+    flex:1;
+    padding:12px 14px;
+    border:1.5px solid #e8e1d4;
+    border-radius:10px;
+    font-family:'DM Mono', monospace;
+    font-size:16px;
+    background:#fbf8f2;
+    color:var(--ink);
+  }
+  .input-row input:focus{ outline:2px solid var(--ember-2); border-color:transparent; }
+  .input-row button{
+    padding:12px 18px;
+    border:none; border-radius:10px;
+    background:var(--ink); color:var(--paper);
+    font-family:'Prompt',sans-serif; font-weight:700; font-size:14px;
+    cursor:pointer;
+  }
+  .input-row button:active{ transform:scale(0.97); }
+
+  /* Progress track / milestones */
+  .track{
+    position:relative;
+    margin:8px 4px 16px;
+  }
+  .track-line{
+    position:relative;
+    height:8px;
+    background:#f0e9dc;
+    border-radius:4px;
+    margin:0 4px;
+  }
+  .track-fill{
+    position:absolute; top:0; left:0; height:8px;
+    border-radius:4px;
+    background:linear-gradient(90deg, var(--moss), var(--ember-2), var(--ember-1));
+    transition:width .4s ease;
+  }
+  .milestones{
+    display:flex; justify-content:space-between;
+    margin-top:10px;
+  }
+  .milestone{
+    display:flex; flex-direction:column; align-items:center;
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    color:var(--muted);
+    flex:1;
+    position:relative;
+  }
+  .milestone .dot{
+    width:14px; height:14px; border-radius:50%;
+    background:#f0e9dc;
+    border:2px solid #e0d6c4;
+    margin-bottom:6px;
+    transition:all .2s ease;
+  }
+  .milestone.reached .dot{
+    background:var(--moss);
+    border-color:var(--moss);
+  }
+  .milestone.current .dot{
+    background:var(--ember-1);
+    border-color:var(--ember-1);
+    box-shadow:0 0 0 4px rgba(255,122,69,0.18);
+  }
+  .milestone .kg{ font-weight:700; color:var(--ink); }
+  .milestone .reward{
+    font-size:10px; color:var(--muted);
+    margin-top:2px; text-align:center;
+    max-width:60px;
+    line-height:1.3;
+  }
+  .milestone.reached .reward{ color:var(--moss); font-weight:600; }
+
+  /* Reward detail list */
+  .reward-list{
+    display:flex; flex-direction:column; gap:10px;
+    margin-top:6px;
+  }
+  .reward-item{
+    display:flex; align-items:center; gap:12px;
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:14px;
+    padding:14px;
+  }
+  .reward-item.reached{
+    background:var(--moss-bg);
+    border-color:#cfe0cf;
+  }
+  .reward-badge{
+    font-family:'DM Mono', monospace;
+    font-weight:800; font-size:15px;
+    width:46px; height:46px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:#f0e9dc; color:var(--ink);
+    flex-shrink:0;
+    font-size:13px;
+  }
+  .reward-item.reached .reward-badge{
+    background:var(--moss); color:#fff;
+  }
+  .reward-item.big .reward-badge{
+    background:var(--plum-bg); color:var(--plum);
+    font-size:11px;
+  }
+  .reward-item.reached.big .reward-badge{
+    background:var(--plum); color:#fff;
+  }
+  .reward-text b{ display:block; font-size:14px; }
+  .reward-text span{ font-size:12px; color:var(--muted); }
+  .reward-item.reached .reward-text span{ color:var(--moss); font-weight:600; }
+
+  /* Editable note */
+  .edit-hint{
+    text-align:center; font-size:11px; color:var(--muted);
+    margin-top:24px; line-height:1.6;
+    font-family:'DM Mono', monospace;
+  }
+
+  /* Celebration overlay */
+  .celebrate{
+    position:fixed; inset:0;
+    background:rgba(27,31,36,0.92);
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:12px;
+    color:var(--paper);
+    text-align:center;
+    z-index:100;
+    opacity:0; pointer-events:none;
+    transition:opacity .3s ease;
+    padding:24px;
+  }
+  .celebrate.show{ opacity:1; pointer-events:auto; }
+  .celebrate .big{ font-size:64px; }
+  .celebrate h2{ font-size:24px; margin:0; font-weight:800; }
+  .celebrate p{ margin:0; color:#cfc8bd; font-size:14px; max-width:280px; }
+  .celebrate button{
+    margin-top:10px; padding:12px 28px; border:none; border-radius:10px;
+    background:var(--ember-1); color:#2a1100; font-weight:700; font-size:14px;
+    font-family:'Prompt',sans-serif; cursor:pointer;
+  }
+
+  /* ---- Bottom nav ---- */
+  .tabbar{
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--card);
+    border-top:1px solid #e8e1d4;
+    display:flex;
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+    z-index:50;
+  }
+  .tab{
+    flex:1;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:6px 0;
+    background:none; border:none;
+    font-family:'Prompt',sans-serif;
+    font-size:11px; font-weight:600;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .tab.active{ color:var(--ember-1); }
+  .tab svg{ width:22px; height:22px; }
+
+  .page{ display:none; }
+  .page.active{ display:block; }
+
+  /* ---- Editable streak milestones ---- */
+  .ms-edit-list{
+    display:flex; flex-direction:column; gap:8px; margin-top:10px;
+  }
+  .ms-edit-row{
+    display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:10px;
+    padding:8px 10px;
+  }
+  .ms-edit-row input{
+    background:transparent; border:none; color:var(--paper);
+    font-family:'DM Mono', monospace; font-size:13px;
+    width:42px; text-align:center;
+  }
+  .ms-edit-row input[type="text"]{
+    flex:1; width:auto; text-align:left;
+    font-family:'Prompt',sans-serif;
+  }
+  .ms-edit-row .ms-days{
+    font-weight:700; color:var(--ember-3);
+  }
+  .ms-edit-row .ms-remove{
+    background:none; border:none; color:#cfc8bd;
+    font-size:18px; cursor:pointer; padding:0 4px;
+    line-height:1;
+  }
+  .ms-add-row{
+    display:flex; gap:8px; margin-top:8px;
+  }
+  .ms-add-row input{
+    font-family:'DM Mono', monospace; font-size:13px;
+    border:1px solid rgba(255,255,255,0.15);
+    background:rgba(255,255,255,0.05);
+    color:var(--paper);
+    border-radius:8px; padding:8px 10px;
+  }
+  .ms-add-row input[type="number"]{ width:60px; text-align:center; }
+  .ms-add-row input[type="text"]{ flex:1; }
+  .ms-add-row button{
+    background:var(--ember-1); color:#2a1100; border:none;
+    border-radius:8px; padding:8px 14px; font-weight:700;
+    font-family:'Prompt',sans-serif; font-size:13px; cursor:pointer;
+  }
+  .edit-toggle{
+    background:none; border:1px solid rgba(255,255,255,0.15);
+    color:#cfc8bd; border-radius:8px; padding:6px 12px;
+    font-family:'Prompt',sans-serif; font-size:12px; font-weight:600;
+    cursor:pointer; margin-top:10px;
+  }
+
+  /* ---- Wheel page ---- */
+  .wheel-wrap{
+    display:flex; flex-direction:column; align-items:center;
+    margin:24px 0;
+  }
+  .wheel-pointer{
+    width:0; height:0;
+    border-left:14px solid transparent;
+    border-right:14px solid transparent;
+    border-top:22px solid var(--ink);
+    margin-bottom:-2px;
+    z-index:2;
+  }
+  .wheel-stage{
+    width:300px; height:300px;
+    border-radius:50%;
+    position:relative;
+    box-shadow:0 8px 24px rgba(0,0,0,0.15);
+    border:6px solid var(--ink);
+    overflow:hidden;
+  }
+  .wheel{
+    width:100%; height:100%;
+    position:relative;
+    transition:transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+  }
+  .wheel-seg{
+    position:absolute; top:0; left:0;
+    width:50%; height:50%;
+    transform-origin:100% 100%;
+    display:flex; align-items:center; justify-content:flex-end;
+    overflow:hidden;
+  }
+  .wheel-seg-label{
+    font-family:'Prompt',sans-serif;
+    font-size:10.5px; font-weight:700;
+    color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,0.3);
+    transform-origin:left center;
+    white-space:nowrap;
+    padding-right:14px;
+    width:140px;
+    text-align:right;
+  }
+  .wheel-center{
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:54px; height:54px; border-radius:50%;
+    background:var(--card);
+    border:4px solid var(--ink);
+    z-index:3;
+  }
+  .spin-btn{
+    width:100%; margin-top:20px;
+    padding:14px;
+    border:none; border-radius:12px;
+    font-family:'Prompt',sans-serif;
+    font-weight:700; font-size:15px;
+    background:var(--ink); color:var(--paper);
+    cursor:pointer;
+  }
+  .spin-btn:active{ transform:scale(0.98); }
+  .spin-btn:disabled{ opacity:0.5; }
+
+  .result-card{
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:16px;
+    padding:18px;
+    margin-top:16px;
+    text-align:center;
+    display:none;
+  }
+  .result-card.show{ display:block; }
+  .result-name{ font-size:20px; font-weight:800; margin-bottom:6px; }
+  .result-meta{
+    display:flex; justify-content:center; gap:16px;
+    font-family:'DM Mono', monospace; font-size:13px; color:var(--muted);
+  }
+  .result-meta b{ color:var(--moss); }
+
+  .menu-list{
+    display:flex; flex-direction:column; gap:8px; margin-top:20px;
+  }
+  .menu-item{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:12px;
+    padding:12px 14px;
+    gap:8px;
+  }
+  .menu-item .name{ font-size:14px; font-weight:600; flex:1; }
+  .menu-item .meta{
+    font-family:'DM Mono', monospace; font-size:11px; color:var(--muted);
+    text-align:right; flex-shrink:0;
+  }
+  .menu-item .del-btn{
+    background:none; border:none; color:#ccc; font-size:18px;
+    cursor:pointer; padding:0 4px; flex-shrink:0; line-height:1;
+  }
+  .menu-item .del-btn:hover{ color:#e07b6a; }
+
+  /* food edit form */
+  .food-add-card{
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:14px;
+    padding:14px;
+    margin-top:12px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .food-add-card input{
+    width:100%; padding:10px 12px;
+    border:1.5px solid #e8e1d4; border-radius:8px;
+    font-family:'Prompt',sans-serif; font-size:13px;
+    background:#fbf8f2; color:var(--ink);
+  }
+  .food-add-card input:focus{ outline:2px solid var(--ember-2); border-color:transparent; }
+  .food-input-row{ display:flex; gap:8px; }
+  .food-input-row input{ flex:1; }
+  .food-add-card .add-btn{
+    width:100%; padding:11px;
+    border:none; border-radius:8px;
+    background:var(--ink); color:var(--paper);
+    font-family:'Prompt',sans-serif; font-weight:700; font-size:14px;
+    cursor:pointer;
+  }
+  .food-add-card .add-btn:active{ transform:scale(0.98); }
+
+  .menu-edit-toggle{
+    width:100%;
+    background:none; border:1.5px dashed #d4c9b8;
+    color:var(--muted); border-radius:10px;
+    padding:10px; font-family:'Prompt',sans-serif;
+    font-size:13px; font-weight:600; cursor:pointer;
+    margin-top:8px;
+  }
+
+  /* ---- Weight goal edit panel ---- */
+  .weight-edit-panel{
+    margin-top:14px; padding-top:14px;
+    border-top:1px dashed #e8e1d4;
+  }
+  .weight-edit-row{
+    display:flex; gap:8px; margin-bottom:10px;
+  }
+  .weight-edit-row label{
+    flex:1; font-size:11px; color:var(--muted);
+    font-family:'DM Mono', monospace;
+  }
+  .weight-edit-row input{
+    width:100%; margin-top:4px;
+    padding:9px 10px; border:1.5px solid #e8e1d4; border-radius:8px;
+    font-family:'DM Mono', monospace; font-size:14px;
+    background:#fbf8f2; color:var(--ink);
+  }
+  .wm-edit-row{
+    display:flex; align-items:center; gap:8px;
+    background:#fbf8f2; border:1px solid #e8e1d4;
+    border-radius:10px; padding:8px 10px; margin-bottom:8px;
+  }
+  .wm-edit-row input[type="number"]{
+    width:50px; text-align:center;
+    border:none; background:transparent;
+    font-family:'DM Mono', monospace; font-weight:700; font-size:13px;
+  }
+  .wm-edit-row input[type="text"]{
+    flex:1; border:none; background:transparent;
+    font-family:'Prompt',sans-serif; font-size:13px;
+  }
+  .wm-edit-row .wm-big-toggle{
+    font-size:16px; cursor:pointer; opacity:0.3; flex-shrink:0;
+  }
+  .wm-edit-row .wm-big-toggle.active{ opacity:1; }
+  .wm-edit-row .wm-remove{
+    background:none; border:none; color:#ccc; font-size:16px;
+    cursor:pointer; padding:0 2px; flex-shrink:0;
+  }
+  .wm-add-row{
+    display:flex; gap:8px; margin-top:6px;
+  }
+  .wm-add-row input[type="number"]{ width:54px; text-align:center; }
+  .wm-add-row input[type="text"]{ flex:1; }
+  .wm-add-row input{
+    padding:9px 10px; border:1.5px solid #e8e1d4; border-radius:8px;
+    font-family:'Prompt',sans-serif; font-size:13px; background:#fbf8f2; color:var(--ink);
+  }
+  .wm-add-row button{
+    padding:9px 14px; border:none; border-radius:8px;
+    background:var(--ink); color:var(--paper);
+    font-family:'Prompt',sans-serif; font-weight:700; font-size:13px; cursor:pointer;
+  }
+  .edit-toggle-light{
+    background:none; border:1.5px dashed #d4c9b8;
+    color:var(--muted); border-radius:10px;
+    padding:10px; font-family:'Prompt',sans-serif;
+    font-size:13px; font-weight:600; cursor:pointer;
+    width:100%; margin-top:14px;
+  }
+
+  /* ---- Kcal tracker page ---- */
+  .kcal-summary-card{
+    background:var(--ink); color:var(--paper);
+    border-radius:18px; padding:20px;
+    margin-bottom:18px;
+  }
+  .kcal-summary-row{
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .kcal-net{
+    font-family:'DM Mono', monospace; font-weight:800; font-size:34px;
+  }
+  .kcal-net.deficit{ color:#8fd19e; }
+  .kcal-net.surplus{ color:#ff9b7a; }
+  .kcal-net-label{ font-size:12px; color:#cfc8bd; margin-top:2px; }
+  .kcal-breakdown{
+    display:flex; justify-content:space-between;
+    margin-top:16px; padding-top:14px;
+    border-top:1px solid rgba(255,255,255,0.1);
+  }
+  .kcal-bd-item{ text-align:center; flex:1; }
+  .kcal-bd-item .num{ font-family:'DM Mono', monospace; font-weight:700; font-size:18px; }
+  .kcal-bd-item .lbl{ font-size:10px; color:#9c958a; margin-top:2px; }
+  .kcal-bd-item.burn .num{ color:#8fd19e; }
+  .kcal-bd-item.eat .num{ color:#ffb88c; }
+
+  .kcal-input-card{
+    background:var(--card); border:1px solid #e8e1d4;
+    border-radius:16px; padding:16px; margin-bottom:14px;
+  }
+  .kcal-input-title{
+    font-size:13px; font-weight:700; margin-bottom:10px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .kcal-input-row{ display:flex; gap:8px; margin-bottom:8px; }
+  .kcal-input-row input{
+    padding:10px 12px; border:1.5px solid #e8e1d4; border-radius:8px;
+    font-family:'Prompt',sans-serif; font-size:13px;
+    background:#fbf8f2; color:var(--ink);
+  }
+  .kcal-input-row input:focus{ outline:2px solid var(--ember-2); border-color:transparent; }
+  .kcal-input-row .kcal-num{ width:90px; font-family:'DM Mono',monospace; text-align:center; }
+  .kcal-input-row .kcal-name{ flex:1; }
+  .kcal-input-row button{
+    padding:10px 14px; border:none; border-radius:8px;
+    background:var(--moss); color:#fff;
+    font-family:'Prompt',sans-serif; font-weight:700; font-size:13px; cursor:pointer;
+    flex-shrink:0;
+  }
+  .base-kcal-row{ display:flex; gap:8px; align-items:center; }
+  .base-kcal-row input{
+    flex:1; padding:10px 12px; border:1.5px solid #e8e1d4; border-radius:8px;
+    font-family:'DM Mono', monospace; font-size:14px; text-align:center;
+    background:#fbf8f2; color:var(--ink);
+  }
+  .base-kcal-row button{
+    padding:10px 16px; border:none; border-radius:8px;
+    background:var(--ink); color:var(--paper);
+    font-family:'Prompt',sans-serif; font-weight:700; font-size:13px; cursor:pointer;
+  }
+
+  .kcal-log-list{ display:flex; flex-direction:column; gap:6px; }
+  .kcal-log-item{
+    display:flex; justify-content:space-between; align-items:center;
+    background:#fbf8f2; border:1px solid #efe8da;
+    border-radius:10px; padding:9px 12px;
+  }
+  .kcal-log-item .name{ font-size:13px; font-weight:600; flex:1; }
+  .kcal-log-item .amt{
+    font-family:'DM Mono', monospace; font-size:13px; font-weight:700;
+    margin-right:8px; flex-shrink:0;
+  }
+  .kcal-log-item.exercise .amt{ color:var(--moss); }
+  .kcal-log-item.food .amt{ color:#c97b3c; }
+  .kcal-log-item .del{
+    background:none; border:none; color:#ccc; font-size:15px; cursor:pointer; padding:0 2px;
+  }
+  .kcal-empty{
+    text-align:center; color:var(--muted); font-size:12px; padding:14px 0;
+  }
+
+  /* Month nav */
+  .month-nav{
+    display:flex; align-items:center; justify-content:space-between;
+    margin:24px 0 12px;
+  }
+  .month-nav button{
+    background:var(--card); border:1px solid #e8e1d4; border-radius:8px;
+    width:34px; height:34px; font-size:16px; cursor:pointer; color:var(--ink);
+  }
+  .month-nav .month-label{
+    font-weight:700; font-size:15px;
+  }
+
+  .month-summary-card{
+    background:var(--card); border:1px solid #e8e1d4;
+    border-radius:16px; padding:18px;
+  }
+  .month-stat-grid{
+    display:flex; gap:10px; margin-bottom:14px;
+  }
+  .month-stat{
+    flex:1; text-align:center;
+    background:#fbf8f2; border-radius:12px; padding:12px 6px;
+  }
+  .month-stat .num{ font-family:'DM Mono', monospace; font-weight:800; font-size:18px; }
+  .month-stat .lbl{ font-size:10px; color:var(--muted); margin-top:3px; }
+  .month-stat.deficit .num{ color:var(--moss); }
+  .month-stat.surplus .num{ color:#c9694e; }
+
+  .day-log-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 4px; border-bottom:1px solid #f0e9dc;
+    font-size:12px;
+  }
+  .day-log-row:last-child{ border-bottom:none; }
+  .day-log-row .date{ color:var(--muted); font-family:'DM Mono', monospace; width:50px; flex-shrink:0; }
+  .day-log-row .bar-wrap{
+    flex:1; height:6px; background:#f0e9dc; border-radius:3px; margin:0 10px; overflow:hidden;
+  }
+  .day-log-row .bar{ height:100%; border-radius:3px; }
+  .day-log-row .net{
+    font-family:'DM Mono', monospace; font-weight:700; width:60px; text-align:right; flex-shrink:0;
+  }
+  .day-log-row .net.deficit{ color:var(--moss); }
+  .day-log-row .net.surplus{ color:#c9694e; }
+
+
+  /* ---- Firebase login overlay ---- */
+  .auth-overlay{
+    position:fixed; inset:0;
+    background:var(--paper);
+    background-image:
+      radial-gradient(circle at 10% 5%, rgba(255,122,69,0.10), transparent 35%),
+      radial-gradient(circle at 90% 80%, rgba(79,122,92,0.08), transparent 40%);
+    z-index:999;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .auth-overlay.hidden{ display:none; }
+  .auth-card{
+    width:100%; max-width:420px;
+    background:var(--card);
+    border:1px solid #e8e1d4;
+    border-radius:22px;
+    padding:28px 22px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.12);
+    text-align:center;
+  }
+  .auth-icon{
+    width:64px; height:64px; margin:0 auto 14px;
+    border-radius:20px;
+    background:var(--ink);
+    color:var(--ember-3);
+    display:flex; align-items:center; justify-content:center;
+    font-size:34px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.16);
+  }
+  .auth-card h2{
+    font-size:24px; line-height:1.25;
+    margin:0 0 8px; font-weight:800;
+  }
+  .auth-card p{
+    font-size:13px; line-height:1.7;
+    color:var(--muted);
+    margin:0 0 18px;
+  }
+  .auth-btn{
+    width:100%;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:14px 16px;
+    border:none; border-radius:12px;
+    background:var(--ink); color:var(--paper);
+    font-family:'Prompt',sans-serif;
+    font-weight:700; font-size:15px;
+    cursor:pointer;
+  }
+  .auth-btn:active{ transform:scale(0.98); }
+  .auth-error{
+    margin-top:12px;
+    font-size:12px;
+    line-height:1.5;
+    color:#c9694e;
+    min-height:18px;
+  }
+  .user-chip{
+    position:fixed;
+    top:12px; right:12px;
+    z-index:80;
+    display:none;
+    align-items:center; gap:8px;
+    padding:7px 8px 7px 10px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.92);
+    border:1px solid #e8e1d4;
+    box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    font-size:11px;
+    color:var(--muted);
+    max-width:calc(100vw - 24px);
+  }
+  .user-chip.show{ display:flex; }
+  .user-chip .user-name{
+    max-width:160px;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    color:var(--ink);
+    font-weight:600;
+  }
+  .user-chip button{
+    border:none;
+    border-radius:999px;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Prompt',sans-serif;
+    font-size:11px;
+    padding:5px 8px;
+    cursor:pointer;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- Firebase Login Gate -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div class="auth-icon">🔥</div>
+    <h2>ล็อกอินก่อนเข้า<br><span class="accent">เส้นทางสู่เป้าหมาย</span></h2>
+    <p>ใช้ Google Account เพื่อเข้าสู่แอป<br>ข้อมูล tracker ตอนนี้ยังบันทึกไว้ในเครื่องนี้ผ่าน localStorage</p>
+    <button class="auth-btn" id="googleLoginBtn">เข้าสู่ระบบด้วย Google</button>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div class="user-chip" id="userChip">
+  <span>Logged in:</span>
+  <span class="user-name" id="userName">-</span>
+  <button id="logoutBtn">ออก</button>
+</div>
+
+
+<!-- ====== PAGE: HOME ====== -->
+<div class="page active" id="pageHome">
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">เป้าหมายของเรา</p>
+    <h1>ทุกวันที่ทำได้<br>คือ<span class="accent">ไฟ</span>ที่ไม่ดับ 🔥</h1>
+  </header>
+
+  <!-- STREAK -->
+  <div class="streak-card">
+    <div class="streak-top">
+      <div>
+        <div class="streak-num-row">
+          <svg class="flame" id="flameIcon" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C12 2 6 8 6 13C6 17 8.5 20 12 20C15.5 20 18 17 18 13C18 11 17 9.5 16 8.5C16 11 14.5 12.5 13.5 12.5C14.5 10 13 7 11 6C11.5 8 10 9.5 9 10.5C8 11.5 7.5 12.5 7.5 14C7.5 16.5 9.5 18 12 18C14.5 18 16.5 16.2 16.5 13.5C16.5 9.5 12 2 12 2Z" fill="url(#fg)"/>
+            <defs>
+              <linearGradient id="fg" x1="6" y1="2" x2="18" y2="20" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#FFE066"/>
+                <stop offset="1" stop-color="#FF7A45"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="streak-number" id="streakNum">0</div>
+        </div>
+        <div class="streak-label">วันติดต่อกัน</div>
+      </div>
+      <div class="streak-best">สูงสุด<b id="bestStreak">0</b></div>
+    </div>
+
+    <div class="week-row" id="weekRow"></div>
+
+    <button class="checkin-btn" id="checkinBtn">ออกกำลังกายวันนี้แล้ว ✅</button>
+    <button class="undo-btn" id="undoBtn">ยกเลิกการเช็คอินวันนี้</button>
+
+    <!-- Streak milestone chips + edit -->
+    <div class="streak-chips" id="streakChips"></div>
+    <button class="edit-toggle" id="editToggleBtn">✏️ แก้ไข milestone วัน</button>
+
+    <div id="streakEditPanel" style="display:none; margin-top:10px;">
+      <div class="ms-edit-list" id="msEditList"></div>
+      <div class="ms-add-row" style="margin-top:10px;">
+        <input type="number" id="msAddDays" placeholder="วัน" min="1">
+        <input type="text" id="msAddReward" placeholder="รางวัล เช่น นวด 1 ครั้ง">
+        <button id="msAddBtn">+ เพิ่ม</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEIGHT GOAL -->
+  <div class="section-title">น้ำหนักเป้าหมาย</div>
+  <div class="weight-card">
+    <div class="weight-row">
+      <div class="weight-now" id="weightNow">62.0<span> กก.</span></div>
+      <div class="weight-goal">เป้าสุดท้าย<br><b id="finalGoalLabel">45.0 กก.</b></div>
+    </div>
+    <div class="input-row">
+      <input type="number" id="weightInput" step="0.1" placeholder="น้ำหนักวันนี้ (กก.)">
+      <button id="logWeightBtn">บันทึก</button>
+    </div>
+    <div class="track">
+      <div class="track-line"><div class="track-fill" id="trackFill"></div></div>
+    </div>
+    <div class="reward-list" id="rewardList"></div>
+
+    <button class="edit-toggle-light" id="weightEditToggle">✏️ แก้ไขเป้าหมาย/รางวัล</button>
+
+    <div class="weight-edit-panel" id="weightEditPanel" style="display:none;">
+      <div class="weight-edit-row">
+        <label>น้ำหนักเริ่มต้น (กก.)
+          <input type="number" id="editStartWeight" step="0.1">
+        </label>
+        <label>เป้าหมายสุดท้าย (กก.)
+          <input type="number" id="editFinalGoal" step="0.1">
+        </label>
+      </div>
+      <button class="add-btn" id="saveWeightGoalsBtn" style="width:100%; margin-bottom:14px; padding:10px; border:none; border-radius:8px; background:var(--ink); color:var(--paper); font-family:'Prompt',sans-serif; font-weight:700; font-size:13px; cursor:pointer;">บันทึกน้ำหนักเริ่ม/เป้า</button>
+
+      <div id="wmEditList"></div>
+      <div class="wm-add-row">
+        <input type="number" id="wmAddKg" placeholder="กก." step="0.1">
+        <input type="text" id="wmAddReward" placeholder="รางวัล">
+        <button id="wmAddBtn">+ เพิ่ม</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="edit-hint">ข้อมูลบันทึกในเครื่องนี้ — ปิดแอปแล้วข้อมูลยังอยู่</p>
+
+</div>
+</div>
+
+<!-- ====== PAGE: FOOD WHEEL ====== -->
+<div class="page" id="pageWheel">
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">วันนี้กินอะไรดี?</p>
+    <h1>หมุนวงล้อ<span class="accent">เลือกเมนู</span> 🍽️</h1>
+  </header>
+
+  <div class="wheel-wrap">
+    <div class="wheel-pointer"></div>
+    <div class="wheel-stage">
+      <canvas id="wheelCanvas" width="300" height="300"></canvas>
+      <div class="wheel-center"></div>
+    </div>
+  </div>
+
+  <button class="spin-btn" id="spinBtn">🎰 หมุนเลย!</button>
+
+  <div class="result-card" id="resultCard">
+    <div class="result-name" id="resultName"></div>
+    <div class="result-meta">
+      <span>🔥 <b id="resultKcal"></b></span>
+      <span>💪 <b id="resultProtein"></b></span>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">เมนูทั้งหมด</div>
+  <div class="menu-list" id="menuList"></div>
+
+  <button class="menu-edit-toggle" id="menuEditToggle">+ เพิ่ม / แก้ไขเมนู</button>
+
+  <div id="foodEditPanel" style="display:none;">
+    <div class="food-add-card" style="margin-top:8px;">
+      <input type="text" id="foodName" placeholder="ชื่อเมนู เช่น ข้าวต้มปลา">
+      <div class="food-input-row">
+        <input type="text" id="foodKcal" placeholder="kcal เช่น 300–450 kcal">
+        <input type="text" id="foodProtein" placeholder="โปรตีน เช่น 15–20g">
+      </div>
+      <button class="add-btn" id="foodAddBtn">+ เพิ่มเมนูนี้</button>
+    </div>
+  </div>
+
+  <div style="height:80px;"></div>
+
+</div>
+</div>
+
+<!-- ====== PAGE: KCAL TRACKER ====== -->
+<div class="page" id="pageKcal">
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">สมดุลแคลอรี่</p>
+    <h1>กิน vs <span class="accent">ใช้</span> วันนี้ 📊</h1>
+  </header>
+
+  <div class="kcal-summary-card">
+    <div class="kcal-summary-row">
+      <div>
+        <div class="kcal-net" id="kcalNet">0</div>
+        <div class="kcal-net-label" id="kcalNetLabel">kcal</div>
+      </div>
+    </div>
+    <div class="kcal-breakdown">
+      <div class="kcal-bd-item">
+        <div class="num" id="bdBase">0</div>
+        <div class="lbl">ใช้พื้นฐาน</div>
+      </div>
+      <div class="kcal-bd-item burn">
+        <div class="num" id="bdExercise">0</div>
+        <div class="lbl">ออกกำลังกาย</div>
+      </div>
+      <div class="kcal-bd-item eat">
+        <div class="num" id="bdFood">0</div>
+        <div class="lbl">กินเข้าไป</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kcal-input-card">
+    <div class="kcal-input-title">⚡ kcal ใช้พื้นฐานวันนี้ (TDEE วันทำงานปกติ)</div>
+    <div class="base-kcal-row">
+      <input type="number" id="baseKcalInput" placeholder="เช่น 1800">
+      <button id="saveBaseKcalBtn">บันทึก</button>
+    </div>
+  </div>
+
+  <div class="kcal-input-card">
+    <div class="kcal-input-title">🔥 ออกกำลังกาย — เพิ่มรายการที่เผาไป</div>
+    <div class="kcal-input-row">
+      <input type="text" class="kcal-name" id="exName" placeholder="เช่น วิ่ง 30 นาที">
+      <input type="number" class="kcal-num" id="exKcal" placeholder="kcal">
+      <button id="exAddBtn">+</button>
+    </div>
+    <div class="kcal-log-list" id="exerciseLogList"></div>
+  </div>
+
+  <div class="kcal-input-card">
+    <div class="kcal-input-title">🍚 กินเข้าไป — เพิ่มรายการอาหาร</div>
+    <div class="kcal-input-row">
+      <input type="text" class="kcal-name" id="foodLogName" placeholder="เช่น ข้าวมันไก่">
+      <input type="number" class="kcal-num" id="foodLogKcal" placeholder="kcal">
+      <button id="foodLogAddBtn">+</button>
+    </div>
+    <div class="kcal-log-list" id="foodLogList"></div>
+  </div>
+
+  <div class="month-nav">
+    <button id="monthPrevBtn">‹</button>
+    <div class="month-label" id="monthLabel">มิถุนายน 2026</div>
+    <button id="monthNextBtn">›</button>
+  </div>
+
+  <div class="month-summary-card">
+    <div class="month-stat-grid">
+      <div class="month-stat" id="monthDeficitStat">
+        <div class="num" id="monthNet">0</div>
+        <div class="lbl">รวมสุทธิ (kcal)</div>
+      </div>
+      <div class="month-stat">
+        <div class="num" id="monthDaysLogged">0</div>
+        <div class="lbl">วันที่บันทึก</div>
+      </div>
+      <div class="month-stat">
+        <div class="num" id="monthAvg">0</div>
+        <div class="lbl">เฉลี่ย/วัน</div>
+      </div>
+    </div>
+    <div id="monthDayList"></div>
+  </div>
+
+  <div style="height:80px;"></div>
+
+</div>
+</div>
+
+<div class="tabbar">
+  <button class="tab active" id="tabHome" onclick="switchTab('Home')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+      <polyline points="9 21 9 12 15 12 15 21"/>
+    </svg>
+    หน้าหลัก
+  </button>
+  <button class="tab" id="tabWheel" onclick="switchTab('Wheel')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="12" x2="15" y2="14"/>
+      <circle cx="12" cy="12" r="1" fill="currentColor"/>
+    </svg>
+    สุ่มเมนู
+  </button>
+  <button class="tab" id="tabKcal" onclick="switchTab('Kcal')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+    kcal
+  </button>
+</div>
+
+<!-- Celebration overlay -->
+<div class="celebrate" id="celebrateOverlay">
+  <div class="big" id="celebrateEmoji">🎉</div>
+  <h2 id="celebrateTitle">ถึงเป้าหมายแล้ว!</h2>
+  <p id="celebrateText"></p>
+  <button onclick="closeCelebrate()">เก็บไว้ในใจ ❤️</button>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const DEFAULT_START_WEIGHT = 62.0;
+const DEFAULT_FINAL_GOAL   = 45.0;
+
+const DEFAULT_WEIGHT_MILESTONES = [
+  {kg:60, reward:"เงินรางวัล 500 บาท"},
+  {kg:58, reward:"เครื่องสำอางที่อยากได้"},
+  {kg:56, reward:"เงินรางวัล 500 บาท"},
+  {kg:55, reward:"ไดร์เป่าผม Dyson", big:true},
+  {kg:54, reward:"เครื่องสำอางที่อยากได้"},
+  {kg:52, reward:"เงินรางวัล 800 บาท"},
+  {kg:50, reward:"ทริปฮ่องกง ✈️", big:true},
+  {kg:48, reward:"เครื่องสำอาง / ของชอบ"},
+  {kg:46, reward:"เงินรางวัล 1,000 บาท"},
+  {kg:45, reward:"ทริปญี่ปุ่น 🇯🇵", big:true},
+];
+
+const DEFAULT_STREAK_MILESTONES = [
+  {days:7,  reward:"ของหวาน/ของกินที่ชอบ 1 อย่าง"},
+  {days:15, reward:"ของใช้ส่วนตัวเล็กๆ ที่อยากได้"},
+  {days:30, reward:"พาไปทานร้านที่อยากลอง"},
+  {days:60, reward:"งบช็อปปิ้งเสื้อผ้า/ของชอบ"},
+];
+
+const DEFAULT_FOODS = [
+  {name:"กรีกโยเกิร์ต + กราโนล่า",  kcal:"250–400 kcal", protein:"โปรตีน 15–20g"},
+  {name:"กรีกโยเกิร์ต + ข้าวโอ๊ต",   kcal:"250–400 kcal", protein:"โปรตีน 15–20g"},
+  {name:"กรีกโยเกิร์ต + ผลไม้",       kcal:"200–350 kcal", protein:"โปรตีน 15–20g"},
+  {name:"สุกี้แห้งไก่",               kcal:"300–400 kcal", protein:"โปรตีน 25–30g"},
+  {name:"สุกี้แห้งหมู",               kcal:"350–450 kcal", protein:"โปรตีน 20–25g"},
+  {name:"โจ๊กหมู",                    kcal:"250–350 kcal", protein:"โปรตีน 10–15g"},
+  {name:"ก๋วยเตี๋ยวน้ำหมู",           kcal:"300–450 kcal", protein:"โปรตีน 15–20g"},
+  {name:"ก๋วยเตี๋ยวต้มยำหมู",         kcal:"350–500 kcal", protein:"โปรตีน 15–20g"},
+  {name:"ก๋วยจั๊บญวน",               kcal:"300–500 kcal", protein:"โปรตีน 15–25g"},
+  {name:"เกาเหลาหมู + ข้าว",          kcal:"250–450 kcal", protein:"โปรตีน 20–30g"},
+  {name:"ก๋วยเตี๋ยวเรือ",             kcal:"300–500 kcal", protein:"โปรตีน 15–25g"},
+  {name:"ข้าวมันไก่",                 kcal:"550–700 kcal", protein:"โปรตีน 25–30g"},
+  {name:"ข้าวหมูทอด",                 kcal:"600–800 kcal", protein:"โปรตีน 20–25g"},
+  {name:"ข้าวไก่ทอด",                 kcal:"600–800 kcal", protein:"โปรตีน 20–30g"},
+  {name:"ราดหน้า",                    kcal:"450–650 kcal", protein:"โปรตีน 15–25g"},
+  {name:"ผัดซีอิ๊ว",                  kcal:"500–700 kcal", protein:"โปรตีน 15–25g"},
+  {name:"เคบับไก่",                   kcal:"350–600 kcal", protein:"โปรตีน 20–30g"},
+  {name:"หม่าล่าทัง",                 kcal:"300–700 kcal", protein:"โปรตีน 20–40g"},
+  {name:"ไก่ปิ้ง + ข้าวเหนียว",       kcal:"350–600 kcal", protein:"โปรตีน 20–30g"},
+];
+
+// Wheel color palette
+const wheelColors = [
+  "#FF7A45","#FF9F6B","#FFB347","#FFD580",
+  "#7EC8A4","#4F7A5C","#82C0CC","#5B8DB8",
+  "#C97BB2","#7A5980","#E07B6A","#B5533C",
+  "#A0C4A0","#D4A373","#E9C46A","#F4A261",
+  "#6A8EAE","#7B9E87","#C9A87C","#9E7BB5",
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  startWeight: DEFAULT_START_WEIGHT,
+  finalGoal: DEFAULT_FINAL_GOAL,
+  currentWeight: DEFAULT_START_WEIGHT,
+  weightMilestones: null, // null = use defaults
+  streak: 0,
+  bestStreak: 0,
+  checkinDates: [],
+  reachedWeightMilestones: [],
+  reachedStreakMilestones: [],
+  streakMilestones: null,
+  foods: null, // null = use defaults
+  // kcal tracker: kcalDays = { "2026-06-17": { base:1800, exercise:[{name,kcal}], food:[{name,kcal}] } }
+  kcalDays: {},
+};
+
+function loadState(){
+  try{
+    const s = localStorage.getItem('milestoneAppState');
+    if(s) state = {...state, ...JSON.parse(s)};
+    if(!state.streakMilestones)  state.streakMilestones  = [...DEFAULT_STREAK_MILESTONES];
+    if(!state.foods)             state.foods             = [...DEFAULT_FOODS];
+    if(!state.weightMilestones)  state.weightMilestones  = JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
+    if(!state.kcalDays)          state.kcalDays          = {};
+    if(state.startWeight == null) state.startWeight = DEFAULT_START_WEIGHT;
+    if(state.finalGoal == null)   state.finalGoal   = DEFAULT_FINAL_GOAL;
+  }catch(e){
+    state.streakMilestones = [...DEFAULT_STREAK_MILESTONES];
+    state.foods = [...DEFAULT_FOODS];
+    state.weightMilestones = JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
+    state.kcalDays = {};
+  }
+}
+function saveState(){
+  try{ localStorage.setItem('milestoneAppState', JSON.stringify(state)); }catch(e){}
+}
+function todayStr(){
+  return new Date().toISOString().slice(0,10);
+}
+function daysAgoStr(n){
+  const d = new Date();
+  d.setDate(d.getDate()-n);
+  return d.toISOString().slice(0,10);
+}
+
+// ============================================================
+// TAB SWITCHING
+
+// ============================================================
+function switchTab(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page'+name).classList.add('active');
+  document.getElementById('tab'+name).classList.add('active');
+  if(name==='Wheel') drawWheel();
+  if(name==='Kcal') renderKcalPage();
+}
+
+// ============================================================
+// RENDER — HOME
+// ============================================================
+function render(){
+  document.getElementById('streakNum').textContent  = state.streak;
+  document.getElementById('bestStreak').textContent = state.bestStreak;
+
+  const flame = document.getElementById('flameIcon');
+  state.streak > 0 ? flame.classList.add('lit') : flame.classList.remove('lit');
+
+  // Week row
+  const weekRow = document.getElementById('weekRow');
+  weekRow.innerHTML = '';
+  const dayLabels = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+  for(let i=6;i>=0;i--){
+    const ds = daysAgoStr(i);
+    const d  = new Date(); d.setDate(d.getDate()-i);
+    const pill = document.createElement('div');
+    pill.className = 'day-pill';
+    if(state.checkinDates.includes(ds)) pill.classList.add('done');
+    if(i===0) pill.classList.add('today');
+    pill.innerHTML = state.checkinDates.includes(ds) ? '🔥' : dayLabels[d.getDay()];
+    weekRow.appendChild(pill);
+  }
+
+  // Checkin btn
+  const btn = document.getElementById('checkinBtn');
+  const checkedToday = state.checkinDates.includes(todayStr());
+  if(checkedToday){
+    btn.textContent = 'วันนี้สำเร็จแล้ว 🔥 พรุ่งนี้มาต่อกัน';
+    btn.classList.add('done');
+  } else {
+    btn.textContent = 'ออกกำลังกายวันนี้แล้ว ✅';
+    btn.classList.remove('done');
+  }
+  document.getElementById('undoBtn').classList.toggle('visible', checkedToday);
+
+  // Streak chips (display only)
+  const sm = state.streakMilestones.slice().sort((a,b)=>a.days-b.days);
+  const chipsEl = document.getElementById('streakChips');
+  chipsEl.innerHTML = '';
+  sm.forEach(m=>{
+    const done = state.streak >= m.days;
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (done ? ' reached' : '');
+    chip.textContent = (done ? '✓ ' : '') + m.days + ' วัน — ' + m.reward;
+    chipsEl.appendChild(chip);
+  });
+
+  // Edit panel list
+  renderEditPanel();
+
+  // Weight
+  document.getElementById('weightNow').innerHTML = state.currentWeight.toFixed(1) + '<span> กก.</span>';
+  document.getElementById('finalGoalLabel').textContent = state.finalGoal.toFixed(1) + ' กก.';
+  const totalRange = state.startWeight - state.finalGoal;
+  const progressed = Math.max(0, Math.min(totalRange, state.startWeight - state.currentWeight));
+  document.getElementById('trackFill').style.width = (totalRange > 0 ? (progressed/totalRange*100) : 0) + '%';
+
+  // Reward list
+  const wm = state.weightMilestones.slice().sort((a,b)=>b.kg-a.kg);
+  const rewardList = document.getElementById('rewardList');
+  rewardList.innerHTML = '';
+  wm.forEach(m=>{
+    const reached = state.currentWeight <= m.kg;
+    const item = document.createElement('div');
+    item.className = 'reward-item' + (reached?' reached':'') + (m.big?' big':'');
+    item.innerHTML = `
+      <div class="reward-badge">${m.kg}<span style="font-size:9px;"> kg</span></div>
+      <div class="reward-text">
+        <b>${m.reward}</b>
+        <span>${reached ? 'สำเร็จแล้ว ✓' : 'อีก '+(state.currentWeight-m.kg).toFixed(1)+' กก.'}</span>
+      </div>`;
+    rewardList.appendChild(item);
+  });
+}
+
+// ============================================================
+// EDITABLE STREAK MILESTONES
+// ============================================================
+let editPanelOpen = false;
+
+document.getElementById('editToggleBtn').addEventListener('click', ()=>{
+  editPanelOpen = !editPanelOpen;
+  document.getElementById('streakEditPanel').style.display = editPanelOpen ? 'block' : 'none';
+  document.getElementById('editToggleBtn').textContent = editPanelOpen ? '✕ ปิด' : '✏️ แก้ไข milestone วัน';
+});
+
+function renderEditPanel(){
+  const sm = state.streakMilestones.slice().sort((a,b)=>a.days-b.days);
+  const list = document.getElementById('msEditList');
+  list.innerHTML = '';
+  sm.forEach((m, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'ms-edit-row';
+    row.innerHTML = `
+      <span class="ms-days">${m.days} วัน</span>
+      <input type="text" value="${m.reward}" data-idx="${idx}" class="ms-reward-input" placeholder="รางวัล">
+      <button class="ms-remove" data-days="${m.days}">✕</button>`;
+    list.appendChild(row);
+  });
+  // reward text live edit
+  list.querySelectorAll('.ms-reward-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = parseInt(e.target.dataset.idx);
+      const sorted = state.streakMilestones.slice().sort((a,b)=>a.days-b.days);
+      const target = sorted[i];
+      const real = state.streakMilestones.find(x=>x.days===target.days);
+      if(real){ real.reward = e.target.value; saveState(); render(); }
+    });
+  });
+  // remove buttons
+  list.querySelectorAll('.ms-remove').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const days = parseInt(e.target.dataset.days);
+      state.streakMilestones = state.streakMilestones.filter(x=>x.days!==days);
+      state.reachedStreakMilestones = state.reachedStreakMilestones.filter(d=>d!==days);
+      saveState(); render();
+    });
+  });
+}
+
+document.getElementById('msAddBtn').addEventListener('click', ()=>{
+  const daysEl   = document.getElementById('msAddDays');
+  const rewardEl = document.getElementById('msAddReward');
+  const days   = parseInt(daysEl.value);
+  const reward = rewardEl.value.trim();
+  if(!days || days < 1 || !reward) return;
+  if(state.streakMilestones.find(m=>m.days===days)){
+    alert('มี milestone '+days+' วันอยู่แล้ว'); return;
+  }
+  state.streakMilestones.push({days, reward});
+  daysEl.value=''; rewardEl.value='';
+  saveState(); render();
+});
+
+// ============================================================
+// CHECKIN ACTIONS
+// ============================================================
+document.getElementById('checkinBtn').addEventListener('click', ()=>{
+  const today = todayStr();
+  if(state.checkinDates.includes(today)) return;
+  const yesterday = daysAgoStr(1);
+  state.streak = (state.checkinDates.includes(yesterday) || state.streak===0) ? state.streak+1 : 1;
+  state.checkinDates.push(today);
+  state.checkinDates = state.checkinDates.filter(d=>d>=daysAgoStr(13));
+  if(state.streak > state.bestStreak) state.bestStreak = state.streak;
+  const hit = state.streakMilestones.find(m=>m.days===state.streak && !state.reachedStreakMilestones.includes(m.days));
+  if(hit){
+    state.reachedStreakMilestones.push(hit.days);
+    showCelebrate('🔥', `ครบ ${hit.days} วันแล้ว!`, hit.reward);
+  }
+  saveState(); render();
+});
+
+document.getElementById('undoBtn').addEventListener('click', ()=>{
+  const today = todayStr();
+  if(!state.checkinDates.includes(today)) return;
+  state.checkinDates = state.checkinDates.filter(d=>d!==today);
+  let streak=0, cursor=new Date();
+  cursor.setDate(cursor.getDate()-1);
+  while(state.checkinDates.includes(cursor.toISOString().slice(0,10))){
+    streak++; cursor.setDate(cursor.getDate()-1);
+  }
+  state.streak = streak;
+  state.reachedStreakMilestones = state.reachedStreakMilestones.filter(d=>d<=streak);
+  saveState(); render();
+});
+
+document.getElementById('logWeightBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('weightInput');
+  const val   = parseFloat(input.value);
+  if(isNaN(val)||val<=0||val>200) return;
+  const prev = state.currentWeight;
+  state.currentWeight = val;
+  input.value = '';
+  const newlyReached = state.weightMilestones.filter(m=>val<=m.kg && prev>m.kg && !state.reachedWeightMilestones.includes(m.kg));
+  newlyReached.forEach(m=>state.reachedWeightMilestones.push(m.kg));
+  if(newlyReached.length>0){
+    const m = newlyReached.sort((a,b)=>a.kg-b.kg)[0];
+    showCelebrate(m.big?'🎁':'⭐', `ถึง ${m.kg} กก. แล้ว!`, m.reward);
+  }
+  saveState(); render();
+});
+
+// ============================================================
+// EDITABLE WEIGHT GOALS & MILESTONES
+// ============================================================
+let weightEditOpen = false;
+
+document.getElementById('weightEditToggle').addEventListener('click', ()=>{
+  weightEditOpen = !weightEditOpen;
+  document.getElementById('weightEditPanel').style.display = weightEditOpen ? 'block' : 'none';
+  document.getElementById('weightEditToggle').textContent = weightEditOpen ? '✕ ปิด' : '✏️ แก้ไขเป้าหมาย/รางวัล';
+  if(weightEditOpen){
+    document.getElementById('editStartWeight').value = state.startWeight;
+    document.getElementById('editFinalGoal').value   = state.finalGoal;
+    renderWeightMilestoneEdit();
+  }
+});
+
+document.getElementById('saveWeightGoalsBtn').addEventListener('click', ()=>{
+  const sw = parseFloat(document.getElementById('editStartWeight').value);
+  const fg = parseFloat(document.getElementById('editFinalGoal').value);
+  if(!isNaN(sw) && sw > 0) state.startWeight = sw;
+  if(!isNaN(fg) && fg > 0) state.finalGoal = fg;
+  saveState(); render();
+});
+
+function renderWeightMilestoneEdit(){
+  const wm = state.weightMilestones.slice().sort((a,b)=>b.kg-a.kg);
+  const list = document.getElementById('wmEditList');
+  list.innerHTML = '';
+  wm.forEach((m)=>{
+    const row = document.createElement('div');
+    row.className = 'wm-edit-row';
+    row.innerHTML = `
+      <input type="number" step="0.1" value="${m.kg}" data-kg="${m.kg}" class="wm-kg-input">
+      <span style="font-size:11px; color:var(--muted);">กก.</span>
+      <input type="text" value="${m.reward}" data-kg="${m.kg}" class="wm-reward-input" placeholder="รางวัล">
+      <span class="wm-big-toggle ${m.big?'active':''}" data-kg="${m.kg}" title="รางวัลใหญ่">🎁</span>
+      <button class="wm-remove" data-kg="${m.kg}">✕</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('.wm-reward-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const kg = parseFloat(e.target.dataset.kg);
+      const real = state.weightMilestones.find(x=>x.kg===kg);
+      if(real){ real.reward = e.target.value; saveState(); render(); }
+    });
+  });
+  list.querySelectorAll('.wm-kg-input').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const oldKg = parseFloat(e.target.dataset.kg);
+      const newKg = parseFloat(e.target.value);
+      const real = state.weightMilestones.find(x=>x.kg===oldKg);
+      if(real && !isNaN(newKg)){ real.kg = newKg; saveState(); render(); renderWeightMilestoneEdit(); }
+    });
+  });
+  list.querySelectorAll('.wm-big-toggle').forEach(el=>{
+    el.addEventListener('click', e=>{
+      const kg = parseFloat(e.target.dataset.kg);
+      const real = state.weightMilestones.find(x=>x.kg===kg);
+      if(real){ real.big = !real.big; saveState(); render(); renderWeightMilestoneEdit(); }
+    });
+  });
+  list.querySelectorAll('.wm-remove').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const kg = parseFloat(e.target.dataset.kg);
+      state.weightMilestones = state.weightMilestones.filter(x=>x.kg!==kg);
+      state.reachedWeightMilestones = state.reachedWeightMilestones.filter(k=>k!==kg);
+      saveState(); render(); renderWeightMilestoneEdit();
+    });
+  });
+}
+
+document.getElementById('wmAddBtn').addEventListener('click', ()=>{
+  const kgEl = document.getElementById('wmAddKg');
+  const rwEl = document.getElementById('wmAddReward');
+  const kg = parseFloat(kgEl.value);
+  const reward = rwEl.value.trim();
+  if(isNaN(kg) || !reward) return;
+  if(state.weightMilestones.find(m=>m.kg===kg)){ alert('มี milestone '+kg+' กก. อยู่แล้ว'); return; }
+  state.weightMilestones.push({kg, reward});
+  kgEl.value=''; rwEl.value='';
+  saveState(); render(); renderWeightMilestoneEdit();
+});
+
+// ============================================================
+// WHEEL
+// ============================================================
+let wheelAngle = 0;
+let spinning   = false;
+
+function drawWheel(highlightIdx = -1){
+  const canvas  = document.getElementById('wheelCanvas');
+  const ctx     = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2, r = W/2;
+  const n  = state.foods.length;
+  if(n < 1) return;
+  const slice = (2*Math.PI)/n;
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate((wheelAngle * Math.PI)/180);
+
+  state.foods.forEach((f,i)=>{
+    const start = i*slice - Math.PI/2;
+    const end   = start+slice;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,r-3,start,end);
+    ctx.closePath();
+    ctx.fillStyle = (i===highlightIdx) ? '#ffe066' : wheelColors[i%wheelColors.length];
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.15)';
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(start+slice/2);
+    ctx.textAlign='right';
+    ctx.fillStyle = (i===highlightIdx) ? '#2a1100' : '#fff';
+    ctx.shadowColor='rgba(0,0,0,0.35)';
+    ctx.shadowBlur=4;
+    const fontSize = n>15 ? 9 : 10;
+    ctx.font = `700 ${fontSize}px Prompt, sans-serif`;
+    let label = f.name;
+    if(ctx.measureText(label).width > r*0.62) label = label.slice(0,10)+'…';
+    ctx.fillText(label, r-8, 4);
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+document.getElementById('spinBtn').addEventListener('click', ()=>{
+  if(spinning) return;
+  spinning = true;
+  const btn = document.getElementById('spinBtn');
+  btn.disabled = true;
+  document.getElementById('resultCard').classList.remove('show');
+
+  const n     = state.foods.length;
+  const slice = 360/n;
+  const extra = 360*5 + Math.random()*360;
+  const target= wheelAngle + extra;
+
+  const start   = performance.now();
+  const duration= 4000;
+  const from    = wheelAngle;
+
+  function ease(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+  function animate(now){
+    const elapsed = now - start;
+    const progress= Math.min(elapsed/duration, 1);
+    wheelAngle = from + extra * ease(progress);
+    drawWheel();
+    if(progress < 1){
+      requestAnimationFrame(animate);
+    } else {
+      wheelAngle = target % 360;
+      spinning = false;
+      btn.disabled = false;
+
+      const normalized = ((360 - (wheelAngle % 360)) % 360);
+      const idx = Math.floor(normalized / slice) % n;
+      const food = state.foods[idx];
+
+      drawWheel(idx);
+
+      document.getElementById('resultName').textContent    = food.name;
+      document.getElementById('resultKcal').textContent    = food.kcal;
+      document.getElementById('resultProtein').textContent = food.protein;
+      document.getElementById('resultCard').classList.add('show');
+    }
+  }
+  requestAnimationFrame(animate);
+});
+
+// Build/rebuild menu list from state.foods
+function buildMenuList(){
+  const list = document.getElementById('menuList');
+  list.innerHTML = '';
+  state.foods.forEach((f, idx)=>{
+    const item = document.createElement('div');
+    item.className = 'menu-item';
+    item.innerHTML = `
+      <div class="name">${f.name}</div>
+      <div class="meta">${f.kcal}<br>${f.protein}</div>
+      <button class="del-btn" data-idx="${idx}" title="ลบเมนูนี้">✕</button>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const i = parseInt(e.currentTarget.dataset.idx);
+      if(state.foods.length <= 2){ alert('ต้องมีเมนูอย่างน้อย 2 อย่าง'); return; }
+      state.foods.splice(i,1);
+      saveState();
+      buildMenuList();
+      drawWheel();
+    });
+  });
+}
+
+// Food edit panel toggle
+let foodEditOpen = false;
+document.getElementById('menuEditToggle').addEventListener('click', ()=>{
+  foodEditOpen = !foodEditOpen;
+  document.getElementById('foodEditPanel').style.display = foodEditOpen ? 'block' : 'none';
+  document.getElementById('menuEditToggle').textContent = foodEditOpen ? '✕ ปิด' : '+ เพิ่ม / แก้ไขเมนู';
+});
+
+// Add new food
+document.getElementById('foodAddBtn').addEventListener('click', ()=>{
+  const nameEl    = document.getElementById('foodName');
+  const kcalEl    = document.getElementById('foodKcal');
+  const proteinEl = document.getElementById('foodProtein');
+  const name    = nameEl.value.trim();
+  const kcal    = kcalEl.value.trim();
+  const protein = proteinEl.value.trim();
+  if(!name){ nameEl.focus(); return; }
+  state.foods.push({
+    name,
+    kcal:    kcal    || '–',
+    protein: protein ? 'โปรตีน '+protein : '–',
+  });
+  nameEl.value=''; kcalEl.value=''; proteinEl.value='';
+  saveState();
+  buildMenuList();
+  drawWheel();
+});
+
+// ============================================================
+// KCAL TRACKER
+// ============================================================
+let kcalViewMonth = new Date(); // month currently shown in monthly summary
+
+function getDayLog(dateStr){
+  if(!state.kcalDays[dateStr]){
+    state.kcalDays[dateStr] = { base: 0, exercise: [], food: [] };
+  }
+  return state.kcalDays[dateStr];
+}
+
+function dayTotals(dateStr){
+  const log = state.kcalDays[dateStr];
+  if(!log) return { base:0, exercise:0, food:0, net:0, hasData:false };
+  const exercise = log.exercise.reduce((s,x)=>s+x.kcal,0);
+  const food     = log.food.reduce((s,x)=>s+x.kcal,0);
+  const base     = log.base || 0;
+  // net = food eaten - (base used + exercise burned). Negative = deficit (good), positive = surplus.
+  const net = food - (base + exercise);
+  const hasData = base>0 || log.exercise.length>0 || log.food.length>0;
+  return { base, exercise, food, net, hasData };
+}
+
+function renderKcalPage(){
+  const today = todayStr();
+  const log = getDayLog(today);
+
+  document.getElementById('baseKcalInput').value = log.base || '';
+
+  const t = dayTotals(today);
+  const netEl = document.getElementById('kcalNet');
+  const netLabelEl = document.getElementById('kcalNetLabel');
+  netEl.textContent = (t.net>0?'+':'') + t.net;
+  netEl.className = 'kcal-net ' + (t.net <= 0 ? 'deficit' : 'surplus');
+  netLabelEl.textContent = t.net <= 0
+    ? `kcal ขาดดุล (ใช้มากกว่ากิน ${Math.abs(t.net)})`
+    : `kcal เกินดุล (กินมากกว่าใช้ ${t.net})`;
+
+  document.getElementById('bdBase').textContent     = t.base;
+  document.getElementById('bdExercise').textContent = '-'+t.exercise;
+  document.getElementById('bdFood').textContent      = '+'+t.food;
+
+  // exercise log list
+  const exList = document.getElementById('exerciseLogList');
+  exList.innerHTML = '';
+  if(log.exercise.length === 0){
+    exList.innerHTML = '<div class="kcal-empty">ยังไม่มีรายการวันนี้</div>';
+  } else {
+    log.exercise.forEach((item, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'kcal-log-item exercise';
+      row.innerHTML = `
+        <div class="name">${item.name}</div>
+        <div class="amt">-${item.kcal}</div>
+        <button class="del" data-idx="${idx}">✕</button>`;
+      exList.appendChild(row);
+    });
+    exList.querySelectorAll('.del').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        log.exercise.splice(parseInt(e.currentTarget.dataset.idx),1);
+        saveState(); renderKcalPage();
+      });
+    });
+  }
+
+  // food log list
+  const foodList = document.getElementById('foodLogList');
+  foodList.innerHTML = '';
+  if(log.food.length === 0){
+    foodList.innerHTML = '<div class="kcal-empty">ยังไม่มีรายการวันนี้</div>';
+  } else {
+    log.food.forEach((item, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'kcal-log-item food';
+      row.innerHTML = `
+        <div class="name">${item.name}</div>
+        <div class="amt">+${item.kcal}</div>
+        <button class="del" data-idx="${idx}">✕</button>`;
+      foodList.appendChild(row);
+    });
+    foodList.querySelectorAll('.del').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        log.food.splice(parseInt(e.currentTarget.dataset.idx),1);
+        saveState(); renderKcalPage();
+      });
+    });
+  }
+
+  renderMonthSummary();
+}
+
+document.getElementById('saveBaseKcalBtn').addEventListener('click', ()=>{
+  const val = parseInt(document.getElementById('baseKcalInput').value);
+  if(isNaN(val) || val < 0) return;
+  const log = getDayLog(todayStr());
+  log.base = val;
+  saveState(); renderKcalPage();
+});
+
+document.getElementById('exAddBtn').addEventListener('click', ()=>{
+  const nameEl = document.getElementById('exName');
+  const kcalEl = document.getElementById('exKcal');
+  const name = nameEl.value.trim();
+  const kcal = parseInt(kcalEl.value);
+  if(!name || isNaN(kcal) || kcal<=0) return;
+  const log = getDayLog(todayStr());
+  log.exercise.push({name, kcal});
+  nameEl.value=''; kcalEl.value='';
+  saveState(); renderKcalPage();
+});
+
+document.getElementById('foodLogAddBtn').addEventListener('click', ()=>{
+  const nameEl = document.getElementById('foodLogName');
+  const kcalEl = document.getElementById('foodLogKcal');
+  const name = nameEl.value.trim();
+  const kcal = parseInt(kcalEl.value);
+  if(!name || isNaN(kcal) || kcal<=0) return;
+  const log = getDayLog(todayStr());
+  log.food.push({name, kcal});
+  nameEl.value=''; kcalEl.value='';
+  saveState(); renderKcalPage();
+});
+
+// Monthly navigation
+document.getElementById('monthPrevBtn').addEventListener('click', ()=>{
+  kcalViewMonth.setMonth(kcalViewMonth.getMonth()-1);
+  renderMonthSummary();
+});
+document.getElementById('monthNextBtn').addEventListener('click', ()=>{
+  kcalViewMonth.setMonth(kcalViewMonth.getMonth()+1);
+  renderMonthSummary();
+});
+
+const thaiMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+function renderMonthSummary(){
+  const y = kcalViewMonth.getFullYear();
+  const m = kcalViewMonth.getMonth();
+  document.getElementById('monthLabel').textContent = thaiMonths[m] + ' ' + (y+543); // Buddhist era for Thai context
+
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  let totalNet = 0, daysLogged = 0;
+  const dayRows = [];
+
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const t = dayTotals(dateStr);
+    if(t.hasData){
+      totalNet += t.net;
+      daysLogged++;
+      dayRows.push({ day:d, dateStr, ...t });
+    }
+  }
+
+  document.getElementById('monthDaysLogged').textContent = daysLogged;
+  document.getElementById('monthNet').textContent = (totalNet>0?'+':'') + totalNet;
+  document.getElementById('monthAvg').textContent = daysLogged>0 ? Math.round(totalNet/daysLogged) : 0;
+
+  const stat = document.getElementById('monthDeficitStat');
+  stat.className = 'month-stat ' + (totalNet <= 0 ? 'deficit' : 'surplus');
+
+  // day list with bars
+  const maxAbs = Math.max(1, ...dayRows.map(r=>Math.abs(r.net)));
+  const listEl = document.getElementById('monthDayList');
+  listEl.innerHTML = '';
+  if(dayRows.length === 0){
+    listEl.innerHTML = '<div class="kcal-empty">ยังไม่มีข้อมูลเดือนนี้</div>';
+  } else {
+    dayRows.forEach(r=>{
+      const row = document.createElement('div');
+      row.className = 'day-log-row';
+      const barPct = Math.min(100, Math.abs(r.net)/maxAbs*100);
+      const barColor = r.net <= 0 ? 'var(--moss)' : '#c9694e';
+      row.innerHTML = `
+        <div class="date">${r.day}</div>
+        <div class="bar-wrap"><div class="bar" style="width:${barPct}%; background:${barColor};"></div></div>
+        <div class="net ${r.net<=0?'deficit':'surplus'}">${r.net>0?'+':''}${r.net}</div>`;
+      listEl.appendChild(row);
+    });
+  }
+}
+
+// ============================================================
+// CELEBRATE
+// ============================================================
+function showCelebrate(emoji,title,text){
+  document.getElementById('celebrateEmoji').textContent = emoji;
+  document.getElementById('celebrateTitle').textContent = title;
+  document.getElementById('celebrateText').textContent  = 'รางวัล: '+text;
+  document.getElementById('celebrateOverlay').classList.add('show');
+}
+function closeCelebrate(){
+  document.getElementById('celebrateOverlay').classList.remove('show');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadState();
+render();
+buildMenuList();
+drawWheel();
+</script>
+
+
+<script type="module">
+  // ============================================================
+  // FIREBASE AUTH — Replace firebaseConfig with your project config
+  // Firebase Console > Project settings > Your apps > Web app config
+  // ============================================================
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
+  import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult,
+    onAuthStateChanged,
+    signOut,
+    browserLocalPersistence,
+    setPersistence
+  } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
+
+  const firebaseConfig = {
+    apiKey: 'PASTE_YOUR_API_KEY_HERE',
+    authDomain: 'PASTE_YOUR_PROJECT_ID.firebaseapp.com',
+    projectId: 'PASTE_YOUR_PROJECT_ID',
+    storageBucket: 'PASTE_YOUR_PROJECT_ID.firebasestorage.app',
+    messagingSenderId: 'PASTE_YOUR_MESSAGING_SENDER_ID',
+    appId: 'PASTE_YOUR_APP_ID'
+  };
+
+  const overlay = document.getElementById('authOverlay');
+  const loginBtn = document.getElementById('googleLoginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const userChip = document.getElementById('userChip');
+  const userName = document.getElementById('userName');
+  const authError = document.getElementById('authError');
+
+  function showAuthError(message){
+    authError.textContent = message || 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+  }
+
+  function isFirebaseConfigReady(){
+    return firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('PASTE_');
+  }
+
+  if(!isFirebaseConfigReady()){
+    showAuthError('ยังไม่ได้ใส่ firebaseConfig ในไฟล์ index.html');
+    loginBtn.disabled = true;
+    loginBtn.style.opacity = '0.45';
+  } else {
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    await setPersistence(auth, browserLocalPersistence);
+
+    getRedirectResult(auth).catch((error) => {
+      showAuthError(error.message);
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      authError.textContent = '';
+      loginBtn.disabled = true;
+      try{
+        await signInWithPopup(auth, provider);
+      }catch(error){
+        // Popup may be blocked on some mobile browsers / PWA mode, so redirect is the fallback.
+        if(['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(error.code)){
+          await signInWithRedirect(auth, provider);
+        }else{
+          showAuthError(error.message);
+          loginBtn.disabled = false;
+        }
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      loginBtn.disabled = false;
+      if(user){
+        overlay.classList.add('hidden');
+        userChip.classList.add('show');
+        userName.textContent = user.displayName || user.email || 'User';
+      }else{
+        overlay.classList.remove('hidden');
+        userChip.classList.remove('show');
+        userName.textContent = '-';
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
