@@ -1036,7 +1036,21 @@
       </div>
     </div>
   </div>
-
+<div class="kcal-input-card">
+  <div class="kcal-input-title">🤖 AI kcal chat</div>
+  <div class="kcal-input-row">
+    <input
+      type="text"
+      class="kcal-name"
+      id="aiKcalMessage"
+      placeholder="เช่น วันนี้กินข้าวมันไก่ / Cardio 20m"
+    >
+    <button id="aiKcalSendBtn">ส่ง</button>
+  </div>
+  <div id="aiKcalReply" class="kcal-empty">
+    พิมพ์สิ่งที่กินหรือออกกำลังกายได้เลย
+  </div>
+</div>
   <div class="kcal-input-card">
     <div class="kcal-input-title">⚡ kcal ใช้พื้นฐานวันนี้ (TDEE วันทำงานปกติ)</div>
     <div class="base-kcal-row">
@@ -1753,6 +1767,83 @@ function renderKcalPage(){
 
   renderMonthSummary();
 }
+const AI_KCAL_WORKER_URL = "https://milestone-kcal-ai.poroboy.workers.dev";
+
+async function handleAiKcalMessage() {
+  const input = document.getElementById("aiKcalMessage");
+  const reply = document.getElementById("aiKcalReply");
+  const sendBtn = document.getElementById("aiKcalSendBtn");
+
+  const message = input.value.trim();
+  if (!message) return;
+
+  reply.textContent = "กำลังประเมิน kcal...";
+  sendBtn.disabled = true;
+
+  try {
+    const res = await fetch(AI_KCAL_WORKER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message,
+        currentWeight: state.currentWeight || null
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error(data);
+      throw new Error(data.error || "AI request failed");
+    }
+
+    const today = todayStr();
+    const log = getDayLog(today);
+
+    let addedText = [];
+
+    if (Array.isArray(data.items)) {
+      data.items.forEach(item => {
+        const kcal = Math.round(Number(item.kcal) || 0);
+        if (!kcal) return;
+
+        const label = item.note
+          ? `${item.name} (${item.note})`
+          : item.name;
+
+        if (item.category === "food") {
+          log.food.push({
+            name: label,
+            kcal
+          });
+          addedText.push(`+${kcal} kcal ${item.name}`);
+        }
+
+        if (item.category === "exercise") {
+          log.exercise.push({
+            name: label,
+            kcal
+          });
+          addedText.push(`-${kcal} kcal ${item.name}`);
+        }
+      });
+    }
+
+    input.value = "";
+    saveState();
+    renderKcalPage();
+
+    reply.textContent = data.reply || `เพิ่มให้แล้ว: ${addedText.join(", ")}`;
+  } catch (err) {
+    console.error(err);
+    reply.textContent =
+      "ยังประเมินไม่ได้ ลองพิมพ์ให้ชัดขึ้น เช่น กินข้าวมันไก่ 1 จาน หรือ Cardio 20 นาที";
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
 
 document.getElementById('saveBaseKcalBtn').addEventListener('click', ()=>{
   const val = parseInt(document.getElementById('baseKcalInput').value);
@@ -1845,7 +1936,13 @@ function renderMonthSummary(){
   }
 }
 
-// ============================================================
+document.getElementById("aiKcalSendBtn").addEventListener("click", handleAiKcalMessage);
+
+document.getElementById("aiKcalMessage").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleAiKcalMessage();
+});
+
+// INIT// ============================================================
 // CELEBRATE
 // ============================================================
 function showCelebrate(emoji,title,text){
