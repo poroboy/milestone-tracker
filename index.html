@@ -1225,8 +1225,14 @@ let cloudSaveTimer = null;
 let isCloudLoading = false;
 
 function getTrackerDocRef() {
-  if (!currentUser) return null;
-  return doc(db, "users", currentUser.uid, "tracker", "state");
+  if (!currentUser || !window.firebaseDb || !window.firebaseFirestore) return null;
+  return window.firebaseFirestore.doc(
+    window.firebaseDb,
+    "users",
+    currentUser.uid,
+    "tracker",
+    "state"
+  );
 }
 
 async function loadCloudState(user) {
@@ -1235,7 +1241,7 @@ async function loadCloudState(user) {
 
   try {
     const ref = getTrackerDocRef();
-    const snap = await getDoc(ref);
+    const snap = await window.firebaseFirestore.getDoc(ref);
 
     if (snap.exists() && snap.data().state) {
       state = {
@@ -1274,11 +1280,11 @@ async function saveCloudStateNow() {
     const ref = getTrackerDocRef();
     const safeState = JSON.parse(JSON.stringify(state));
 
-    await setDoc(
+    await window.firebaseFirestore.setDoc(
       ref,
       {
         state: safeState,
-        updatedAt: serverTimestamp()
+        updatedAt: window.firebaseFirestore.serverTimestamp()
       },
       { merge: true }
     );
@@ -2106,6 +2112,13 @@ import {
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
 const db = getFirestore(app);
+    window.firebaseDb = db;
+    window.firebaseFirestore = {
+      doc,
+      getDoc,
+      setDoc,
+      serverTimestamp
+    };
     const provider = new GoogleAuthProvider();
 
     await setPersistence(auth, browserLocalPersistence);
@@ -2157,6 +2170,7 @@ onAuthStateChanged(auth, (user) => {
     userName.textContent = '-';
   }
 });
+  }
 </script>
 
 </body>
