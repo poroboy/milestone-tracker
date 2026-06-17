@@ -738,6 +738,22 @@
     font-size:10px;
     color:var(--muted);
   }
+  .ai-title-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .ai-clear-btn{
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    font-family:'Prompt',sans-serif;
+    font-size:11px;
+    font-weight:600;
+    cursor:pointer;
+    padding:4px 6px;
+  }
 
   /* Month nav */
   .month-nav{
@@ -1072,7 +1088,10 @@
     </div>
   </div>
 <div class="kcal-input-card">
-  <div class="kcal-input-title">🤖 คุยกับ AI สุขภาพ</div>
+  <div class="kcal-input-title ai-title-row">
+    <span>🤖 คุยกับ AI สุขภาพ</span>
+    <button class="ai-clear-btn" id="clearAiChatBtn" type="button">ล้างแชท</button>
+  </div>
   <div class="kcal-input-row">
     <input
       type="text"
@@ -1932,6 +1951,19 @@ function renderAiChatHistory() {
   box.scrollTop = box.scrollHeight;
 }
 
+function clearAiChatHistory() {
+  if (!confirm("ล้างประวัติแชททั้งหมดใช่ไหม? รายการอาหาร/ออกกำลังกายที่บันทึกไว้จะไม่ถูกลบ")) return;
+
+  state.aiChatHistory = [];
+  saveState();
+  renderAiChatHistory();
+
+  const reply = document.getElementById("aiKcalReply");
+  if (reply) {
+    reply.textContent = "ล้างแชทแล้ว ถามหรือบันทึกใหม่ได้เลย";
+  }
+}
+
 async function handleAiKcalMessage() {
   const input = document.getElementById("aiKcalMessage");
   const reply = document.getElementById("aiKcalReply");
@@ -1970,6 +2002,12 @@ async function handleAiKcalMessage() {
         currentWeight: state.currentWeight || null,
         todaySummary: totals,
         todayLog: log,
+        userGoal: {
+          startWeight: state.startWeight || null,
+          finalGoal: state.finalGoal || null,
+          currentWeight: state.currentWeight || null,
+          streak: state.streak || 0
+        },
         chatHistory: state.aiChatHistory.slice(-8)
       })
     });
@@ -2133,6 +2171,8 @@ document.getElementById("aiKcalSendBtn").addEventListener("click", handleAiKcalM
 document.getElementById("aiKcalMessage").addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleAiKcalMessage();
 });
+
+document.getElementById("clearAiChatBtn").addEventListener("click", clearAiChatHistory);
 
 // INIT// ============================================================
 // CELEBRATE
