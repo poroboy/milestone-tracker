@@ -716,11 +716,35 @@
     padding:0;
   }
 
+  .exercise-log-row{
+    display:grid;
+    grid-template-columns:1fr 86px 44px;
+    gap:8px;
+    align-items:center;
+  }
+  .exercise-log-row .kcal-name,
+  .exercise-log-row .kcal-num{
+    width:100%;
+    min-width:0;
+  }
+  .exercise-log-row button{
+    width:44px;
+    height:42px;
+    padding:0;
+  }
+
   @media (max-width:420px){
     .food-log-row{
       grid-template-columns:1fr 1fr 44px;
     }
     .food-log-row .kcal-name{
+      grid-column:1 / -1;
+    }
+
+    .exercise-log-row{
+      grid-template-columns:1fr 44px;
+    }
+    .exercise-log-row .kcal-name{
       grid-column:1 / -1;
     }
   }
@@ -1182,7 +1206,7 @@
 
   <div class="kcal-input-card">
     <div class="kcal-input-title">🔥 ออกกำลังกาย — เพิ่มรายการที่เผาไป</div>
-    <div class="kcal-input-row">
+    <div class="kcal-input-row exercise-log-row">
       <input type="text" class="kcal-name" id="exName" placeholder="เช่น วิ่ง 30 นาที">
       <input type="number" class="kcal-num" id="exKcal" placeholder="kcal">
       <button id="exAddBtn">+</button>
