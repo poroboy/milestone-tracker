@@ -1220,6 +1220,84 @@ let state = {
   kcalDays: {},
 };
 
+let currentUser = null;
+let cloudSaveTimer = null;
+let isCloudLoading = false;
+
+function getTrackerDocRef() {
+  if (!currentUser) return null;
+  return doc(db, "users", currentUser.uid, "tracker", "state");
+}
+
+async function loadCloudState(user) {
+  currentUser = user;
+  isCloudLoading = true;
+
+  try {
+    const ref = getTrackerDocRef();
+    const snap = await getDoc(ref);
+
+    if (snap.exists() && snap.data().state) {
+      state = {
+        ...state,
+        ...snap.data().state
+      };
+
+      try {
+        localStorage.setItem("milestoneAppState", JSON.stringify(state));
+      } catch (e) {}
+
+      render();
+      buildMenuList();
+      drawWheel();
+
+      if (document.getElementById("pageKcal")?.classList.contains("active")) {
+        renderKcalPage();
+      }
+
+      console.log("Cloud state loaded");
+    } else {
+      await saveCloudStateNow();
+      console.log("No cloud state found. Local state uploaded.");
+    }
+  } catch (err) {
+    console.error("Cloud load failed:", err);
+  } finally {
+    isCloudLoading = false;
+  }
+}
+
+async function saveCloudStateNow() {
+  if (!currentUser || isCloudLoading) return;
+
+  try {
+    const ref = getTrackerDocRef();
+    const safeState = JSON.parse(JSON.stringify(state));
+
+    await setDoc(
+      ref,
+      {
+        state: safeState,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    console.log("Cloud state saved");
+  } catch (err) {
+    console.error("Cloud save failed:", err);
+  }
+}
+
+function scheduleCloudSave() {
+  if (!currentUser || isCloudLoading) return;
+
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(() => {
+    saveCloudStateNow();
+  }, 800);
+}
+
 function loadState(){
   try{
     const s = localStorage.getItem('milestoneAppState');
@@ -1238,8 +1316,13 @@ function loadState(){
   }
 }
 function saveState(){
-  try{ localStorage.setItem('milestoneAppState', JSON.stringify(state)); }catch(e){}
+  try {
+    localStorage.setItem("milestoneAppState", JSON.stringify(state));
+  } catch(e) {}
+
+  scheduleCloudSave();
 }
+
 function todayStr(){
   return new Date().toISOString().slice(0,10);
 }
@@ -1983,6 +2066,14 @@ drawWheel();
     setPersistence
   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",
   authDomain: "milestone-tracker-f3c26.firebaseapp.com",
@@ -2014,6 +2105,7 @@ drawWheel();
   } else {
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+const db = getFirestore(app);
     const provider = new GoogleAuthProvider();
 
     await setPersistence(auth, browserLocalPersistence);
@@ -2041,20 +2133,25 @@ drawWheel();
     logoutBtn.addEventListener('click', async () => {
       await signOut(auth);
     });
+  onAuthStateChanged(auth, (user) => {
+  loginBtn.disabled = false;
 
-    onAuthStateChanged(auth, (user) => {
-      loginBtn.disabled = false;
-      if(user){
-        overlay.classList.add('hidden');
-        userChip.classList.add('show');
-        userName.textContent = user.displayName || user.email || 'User';
-      }else{
-        overlay.classList.remove('hidden');
-        userChip.classList.remove('show');
-        userName.textContent = '-';
-      }
-    });
+  if (user) {
+    currentUser = user;
+    loadCloudState(user);
+
+    overlay.classList.add('hidden');
+    userChip.classList.add('show');
+    userName.textContent = user.displayName || user.email || 'User';
+  } else {
+    currentUser = null;
+
+    overlay.classList.remove('hidden');
+    userChip.classList.remove('show');
+    userName.textContent = '-';
   }
+});
+
 </script>
 
 </body>
