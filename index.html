@@ -2115,25 +2115,31 @@ const db = getFirestore(app);
     });
 
     loginBtn.addEventListener('click', async () => {
-      authError.textContent = '';
-      loginBtn.disabled = true;
-      try{
-        await signInWithPopup(auth, provider);
-      }catch(error){
-        // Popup may be blocked on some mobile browsers / PWA mode, so redirect is the fallback.
-        if(['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(error.code)){
-          await signInWithRedirect(auth, provider);
-        }else{
-          showAuthError(error.message);
-          loginBtn.disabled = false;
-        }
-      }
-    });
+  authError.textContent = '';
+  loginBtn.disabled = true;
 
-    logoutBtn.addEventListener('click', async () => {
-      await signOut(auth);
-    });
-  onAuthStateChanged(auth, (user) => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    // Popup may be blocked on some mobile browsers / PWA mode, so redirect is the fallback
+    if ([
+      'auth/popup-blocked',
+      'auth/popup-closed-by-user',
+      'auth/cancelled-popup-request'
+    ].includes(error.code)) {
+      await signInWithRedirect(auth, provider);
+    } else {
+      showAuthError(error.message);
+      loginBtn.disabled = false;
+    }
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await signOut(auth);
+});
+
+onAuthStateChanged(auth, (user) => {
   loginBtn.disabled = false;
 
   if (user) {
@@ -2151,7 +2157,6 @@ const db = getFirestore(app);
     userName.textContent = '-';
   }
 });
-
 </script>
 
 </body>
