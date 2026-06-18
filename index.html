@@ -1181,6 +1181,59 @@
     }
   }
 
+
+  .dash-daily-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .dash-daily-head select{
+    padding:8px 10px;
+    border:1.5px solid #e8e1d4;
+    border-radius:9px;
+    background:#fbf8f2;
+    color:var(--ink);
+    font-family:'Prompt',sans-serif;
+    font-size:12px;
+  }
+  .dash-daily-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .dash-daily-row{
+    display:grid;
+    grid-template-columns:1fr 82px;
+    gap:10px;
+    align-items:center;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:12px;
+    padding:11px 12px;
+  }
+  .dash-daily-date{
+    font-family:'DM Mono', monospace;
+    font-size:12px;
+    font-weight:800;
+    color:var(--ink);
+  }
+  .dash-daily-detail{
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.5;
+    margin-top:3px;
+  }
+  .dash-daily-net{
+    text-align:right;
+    font-family:'DM Mono', monospace;
+    font-weight:800;
+    font-size:13px;
+  }
+  .dash-daily-net.good{ color:var(--moss); }
+  .dash-daily-net.warn{ color:#c9694e; }
+
 </style>
 </head>
 <body>
@@ -1550,6 +1603,16 @@
     <div class="dash-section-title">สรุปรายเดือนทั้งปี</div>
     <div class="dash-month-list" id="dashMonthlyList"></div>
     <div class="dash-mini-note">แถบสีเขียว = ขาดดุล / สีส้ม = เกินดุล โดยคำนวณจากวันที่มีการบันทึก</div>
+  </div>
+
+
+  <div class="dashboard-card">
+    <div class="dash-daily-head">
+      <div class="dash-section-title" style="margin:0;">ดูรายวันย้อนหลัง</div>
+      <select id="dashDailyMonth"></select>
+    </div>
+    <div class="dash-daily-list" id="dashDailyList"></div>
+    <div class="dash-mini-note">แสดงเฉพาะวันที่มีการบันทึก kcal / โปรตีน / น้ำหนัก</div>
   </div>
 
   <div class="dashboard-card">
@@ -2871,6 +2934,7 @@ function renderDashboard(){
   }
 
   renderDashboardMonthly(ym);
+  renderDashboardDaily(ym);
   renderDashboardProtein(ym, proteinGoal);
   renderDashboardWeights(ym);
   renderDashboardInsight(ym, proteinGoal);
@@ -2894,6 +2958,65 @@ function renderDashboardMonthly(ym){
       <div class="value ${good ? "good" : "warn"}">${m.daysLogged ? ((m.totalNet>0?"+":"") + m.totalNet) : "–"}</div>
     `;
     list.appendChild(row);
+  });
+}
+
+
+function renderDashboardDaily(ym){
+  const select = document.getElementById("dashDailyMonth");
+  const list = document.getElementById("dashDailyList");
+  if(!select || !list) return;
+
+  if(!select.dataset.ready){
+    select.innerHTML = thaiMonths.map((m,i)=>`<option value="${i}">${m}</option>`).join("");
+    select.value = String(new Date().getMonth());
+    select.addEventListener("change", () => {
+      renderDashboardDaily(yearMetrics(dashboardYear));
+    });
+    select.dataset.ready = "1";
+  }
+
+  const month = Number(select.value || 0);
+  const daysInMonth = new Date(dashboardYear, month + 1, 0).getDate();
+
+  const rows = [];
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${dashboardYear}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const t = dayTotals(dateStr);
+    const weightLog = (state.weightLogs || []).find(x => x.date === dateStr);
+
+    if(t.hasData || weightLog){
+      rows.push({ dateStr, totals:t, weightLog });
+    }
+  }
+
+  list.innerHTML = "";
+
+  if(!rows.length){
+    list.innerHTML = '<div class="dash-empty">ยังไม่มีข้อมูลรายวันในเดือนนี้</div>';
+    return;
+  }
+
+  rows.reverse().forEach(row => {
+    const t = row.totals;
+    const good = (t.net || 0) <= 0;
+    const weightText = row.weightLog ? ` · ⚖️ ${Number(row.weightLog.weight).toFixed(1)} kg` : "";
+    const netText = t.hasData ? `${t.net > 0 ? "+" : ""}${t.net}` : "–";
+
+    const item = document.createElement("div");
+    item.className = "dash-daily-row";
+
+    item.innerHTML = `
+      <div>
+        <div class="dash-daily-date">${row.dateStr}</div>
+        <div class="dash-daily-detail">
+          กิน +${t.food || 0} kcal · เผา -${t.exercise || 0} kcal · โปรตีน ${Math.round(t.protein || 0)}g${weightText}
+        </div>
+      </div>
+      <div class="dash-daily-net ${good ? "good" : "warn"}">${netText}</div>
+    `;
+
+    list.appendChild(item);
   });
 }
 
