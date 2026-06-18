@@ -2484,10 +2484,42 @@ function clearAiChatHistory() {
 }
 
 
+function ensureAiModelBadgeEl(){
+  let el = document.getElementById("aiModelBadge");
+  if(el) return el;
+
+  el = document.createElement("div");
+  el.id = "aiModelBadge";
+  el.className = "ai-model-badge";
+  el.textContent = "model: auto";
+
+  const title = document.querySelector(".ai-title");
+  const titleRow = document.querySelector(".ai-title-row");
+
+  if(title){
+    title.insertAdjacentElement("afterend", el);
+  }else if(titleRow){
+    titleRow.appendChild(el);
+  }else{
+    const aiCard = document.querySelector("#aiChatHistory")?.closest(".kcal-input-card, .dashboard-card, .card, div");
+    if(aiCard) aiCard.prepend(el);
+  }
+
+  return el;
+}
+
 function updateAiModelBadge(){
-  const el = document.getElementById("aiModelBadge");
+  const el = ensureAiModelBadgeEl();
   if(!el) return;
-  el.textContent = "model: " + (aiModelName || "auto");
+
+  let name = "auto";
+  try{
+    if(typeof aiModelName !== "undefined" && aiModelName){
+      name = aiModelName;
+    }
+  }catch(e){}
+
+  el.textContent = "model: " + name;
 }
 
 async function handleAiKcalMessage() {
@@ -3179,6 +3211,8 @@ setTimeout(() => {
   document.getElementById("applyProfileBtn")?.addEventListener("click", applyProfileSuggestions);
 }, 0);
 
+
+setTimeout(updateAiModelBadge, 0);
 </script>
 
 
