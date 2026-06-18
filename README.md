@@ -53,6 +53,11 @@ If the first model is unavailable or in high demand, the Worker automatically fa
   - baseline activity
 - Estimated BMI, BMR, TDEE, and protein target
 
+### Data Management
+- Export all app data as a JSON backup file
+- Delete individual food and exercise entries for today
+- Reset today's food and exercise logs while preserving base kcal
+
 ### Realtime Context
 - Shows current local date and time
 - Uses Asia/Bangkok time context

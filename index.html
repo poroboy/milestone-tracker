@@ -1299,6 +1299,43 @@
     text-align:right;
     margin-top:2px;
   }
+
+  .data-tools-card .data-tool-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-top:10px;
+  }
+  .data-tool-btn{
+    border:none;
+    border-radius:10px;
+    padding:11px 10px;
+    font-family:'Prompt',sans-serif;
+    font-weight:800;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .data-tool-btn.export{
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .data-tool-btn.danger{
+    background:#fff1ec;
+    color:#b94c2f;
+    border:1px solid #f0c8bb;
+  }
+  .data-tool-note{
+    margin-top:8px;
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.45;
+  }
+  @media(max-width:430px){
+    .data-tools-card .data-tool-actions{
+      grid-template-columns:1fr;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -1567,6 +1604,18 @@
     </div>
     <div class="kcal-log-list" id="foodLogList"></div>
   </div>
+
+  <div class="kcal-input-card data-tools-card">
+    <div class="kcal-input-title">🗂️ จัดการข้อมูลวันนี้</div>
+    <div class="data-tool-actions">
+      <button class="data-tool-btn export" id="exportDataBtn">Export Data</button>
+      <button class="data-tool-btn danger" id="resetTodayLogBtn">Reset วันนี้</button>
+    </div>
+    <div class="data-tool-note">
+      Export จะดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์ .json ส่วน Reset วันนี้จะล้างเฉพาะรายการอาหารและออกกำลังกายของวันนี้ โดยยังเก็บ kcal ใช้พื้นฐานไว้
+    </div>
+  </div>
+
 
   <div class="month-nav">
     <button id="monthPrevBtn">‹</button>
@@ -2418,6 +2467,96 @@ function dayTotals(dateStr){
   return { base, exercise, food, protein, net, hasData };
 }
 
+
+function safeJsonClone(value){
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
+function exportUserData(){
+  const exportedAt = new Date();
+  const payload = {
+    app: "milestone-tracker",
+    exportVersion: 1,
+    exportedAt: exportedAt.toISOString(),
+    timezone: "Asia/Bangkok",
+    uid: typeof currentUser !== "undefined" && currentUser ? currentUser.uid : null,
+    data: safeJsonClone(state)
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const filenameDate = todayStr(exportedAt);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `milestone-tracker-backup-${filenameDate}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+function refreshAfterKcalChange(){
+  saveState();
+
+  if(typeof renderKcalPage === "function") renderKcalPage();
+  if(typeof renderDashboard === "function") renderDashboard();
+}
+
+function deleteKcalItem(type, idx){
+  const today = todayStr();
+  const log = getDayLog(today);
+  const list = type === "exercise" ? log.exercise : log.food;
+  const item = list[idx];
+
+  if(!item) return;
+
+  const label = type === "exercise" ? "ออกกำลังกาย" : "อาหาร";
+  const ok = confirm(`ลบรายการ${label}นี้ไหม?\n\n${item.name}`);
+  if(!ok) return;
+
+  list.splice(idx, 1);
+  refreshAfterKcalChange();
+}
+
+function resetTodayKcalLog(){
+  const today = todayStr();
+  const log = getDayLog(today);
+  const foodCount = log.food.length;
+  const exerciseCount = log.exercise.length;
+
+  if(foodCount === 0 && exerciseCount === 0){
+    alert("วันนี้ยังไม่มีรายการอาหารหรือออกกำลังกายให้ล้าง");
+    return;
+  }
+
+  const ok = confirm(
+    `Reset รายการวันนี้ไหม?\n\n` +
+    `อาหาร: ${foodCount} รายการ\n` +
+    `ออกกำลังกาย: ${exerciseCount} รายการ\n\n` +
+    `ระบบจะยังเก็บ kcal ใช้พื้นฐานของวันนี้ไว้`
+  );
+
+  if(!ok) return;
+
+  log.food = [];
+  log.exercise = [];
+  refreshAfterKcalChange();
+}
+
+document.addEventListener("click", function(e){
+  if(e.target && e.target.id === "exportDataBtn"){
+    exportUserData();
+  }
+
+  if(e.target && e.target.id === "resetTodayLogBtn"){
+    resetTodayKcalLog();
+  }
+});
+
+
 function renderKcalPage(){
   const today = todayStr();
   const log = getDayLog(today);
@@ -2460,8 +2599,7 @@ function renderKcalPage(){
     });
     exList.querySelectorAll('.del').forEach(btn=>{
       btn.addEventListener('click', e=>{
-        log.exercise.splice(parseInt(e.currentTarget.dataset.idx),1);
-        saveState(); renderKcalPage();
+        deleteKcalItem("exercise", parseInt(e.currentTarget.dataset.idx));
       });
     });
   }
@@ -2483,8 +2621,7 @@ function renderKcalPage(){
     });
     foodList.querySelectorAll('.del').forEach(btn=>{
       btn.addEventListener('click', e=>{
-        log.food.splice(parseInt(e.currentTarget.dataset.idx),1);
-        saveState(); renderKcalPage();
+        deleteKcalItem("food", parseInt(e.currentTarget.dataset.idx));
       });
     });
   }
