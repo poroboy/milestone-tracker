@@ -1,10 +1,112 @@
 # Milestone Tracker
 
-Personal habit, weight, food wheel, and kcal tracker web app.
+Personal health and milestone tracking web app with cloud sync, kcal/protein logging, AI health chat, and dashboard analytics.
 
-## Firebase setup
-1. Create Firebase project
-2. Add Web app
-3. Enable Authentication > Google provider
-4. Copy Firebase config into `index.html`
-5. Add your deployed domain to Firebase Authentication authorized domains
+Live app: https://poroboy.github.io/milestone-tracker/
+
+## Current Features
+
+### Account & Cloud Sync
+- Google login with Firebase Authentication
+- Firestore cloud sync per user
+- Local state plus cloud backup behavior
+
+### Kcal & Protein Tracker
+- Daily kcal tracking
+- Manual food log
+- Manual exercise log
+- Protein tracking per food item
+- Daily protein goal
+- Monthly kcal summary
+- Daily history by selected month
+
+### AI Health Chat
+- AI chat for food, kcal, protein, workout, and health suggestions
+- Auto log food and exercise from natural language
+- Estimates kcal and protein from Thai food portions
+- Prevents duplicate logging when the user mentions an item as context
+- Shows active AI model in chat
+- Sends current date/time context to AI for more relevant suggestions
+
+### AI Model Fallback
+
+AI is powered by a Cloudflare Worker connected to Gemini API.
+
+Model priority:
+1. gemini-3.5-flash
+2. gemini-2.5-flash
+3. gemini-2.5-flash-lite
+
+If the first model is unavailable or in high demand, the Worker automatically falls back to the next model.
+
+### Dashboard
+- Yearly dashboard
+- Monthly kcal trend
+- Monthly protein trend
+- Daily history by selected month
+- Weight history
+- Health progress insight
+- Body profile fields:
+  - gender
+  - age
+  - height
+  - baseline activity
+- Estimated BMI, BMR, TDEE, and protein target
+
+### Realtime Context
+- Shows current local date and time
+- Uses Asia/Bangkok time context
+- AI receives time/day-part context for better meal and activity suggestions
+
+## Tech Stack
+
+- HTML / CSS / JavaScript
+- Firebase Authentication
+- Firebase Firestore
+- GitHub Pages
+- Cloudflare Workers
+- Gemini API
+
+## Important Data Notes
+
+The app stores user data in Firestore under a user-specific path.
+
+Do not change the Firestore data path unless a migration plan is prepared.
+
+Important data fields include:
+- kcalDays
+- proteinGoal
+- weightLogs
+- profile
+- aiChatHistory
+
+## Development Notes
+
+This project currently uses a single-file app structure in `index.html`.
+
+As the app grows, the next recommended refactor is to split the project into:
+- index.html
+- styles.css
+- app.js
+- firebase.js
+- kcal.js
+- dashboard.js
+- ai.js
+
+## Backup / Stable Version
+
+Current stable tag: `stable-ai-dashboard-v1`
+
+To inspect this stable version:
+
+    git checkout stable-ai-dashboard-v1
+
+To return to main branch after inspecting:
+
+    git checkout main
+
+## Security Notes
+
+Do not commit API keys or secrets.
+
+Gemini API key should be stored as a Cloudflare Wrangler secret, not inside source code.

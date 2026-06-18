@@ -8,3 +8,6 @@ firebase-debug.log
 index.before-*.html
 index.backup*.html
 index.broken-*.html
+
+# local README backup files
+README.before-*.md
