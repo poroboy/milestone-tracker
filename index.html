@@ -1253,6 +1253,42 @@
     gap:8px;
     flex-wrap:wrap;
   }
+
+  .realtime-clock-card{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:14px;
+    padding:12px 14px;
+    margin:12px 0 16px;
+  }
+  .realtime-clock-card .clock-label{
+    font-size:10px;
+    color:var(--muted);
+    font-family:'DM Mono', monospace;
+    margin-bottom:3px;
+  }
+  .realtime-clock-card .clock-date{
+    font-size:13px;
+    font-weight:800;
+    color:var(--ink);
+  }
+  .realtime-clock-card .clock-time{
+    font-family:'DM Mono', monospace;
+    font-size:20px;
+    font-weight:800;
+    color:var(--moss);
+    white-space:nowrap;
+  }
+  .realtime-clock-card .clock-period{
+    font-size:11px;
+    color:var(--muted);
+    text-align:right;
+    margin-top:2px;
+  }
 </style>
 </head>
 <body>
@@ -1423,6 +1459,18 @@
     <p class="eyebrow">สมดุลแคลอรี่</p>
     <h1>กิน vs <span class="accent">ใช้</span> วันนี้ 📊</h1>
   </header>
+
+  <div class="realtime-clock-card">
+    <div>
+      <div class="clock-label">เวลาปัจจุบัน</div>
+      <div class="clock-date" id="realtimeClockDate">กำลังโหลดวันเวลา...</div>
+    </div>
+    <div>
+      <div class="clock-time" id="realtimeClockTime">--:--</div>
+      <div class="clock-period" id="realtimeClockPeriod">Asia/Bangkok</div>
+    </div>
+  </div>
+
 
   <div class="kcal-summary-card">
     <div class="kcal-summary-row">
@@ -2522,6 +2570,72 @@ function updateAiModelBadge(){
   el.textContent = "model: " + name;
 }
 
+
+function getThaiDayPart(hour){
+  if(hour >= 5 && hour < 11) return "เช้า";
+  if(hour >= 11 && hour < 14) return "เที่ยง";
+  if(hour >= 14 && hour < 17) return "บ่าย";
+  if(hour >= 17 && hour < 21) return "เย็น";
+  return "ดึก";
+}
+
+function getCurrentTimeContext(){
+  const now = new Date();
+
+  const parts = new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(now);
+
+  const get = type => parts.find(p => p.type === type)?.value || "";
+
+  const hour = Number(get("hour")) || now.getHours();
+  const minute = get("minute");
+  const second = get("second");
+
+  return {
+    timezone: "Asia/Bangkok",
+    locale: "th-TH",
+    iso: now.toISOString(),
+    weekday: get("weekday"),
+    day: get("day"),
+    month: get("month"),
+    year: get("year"),
+    hour,
+    minute,
+    second,
+    time: `${String(hour).padStart(2,"0")}:${minute}:${second}`,
+    dayPart: getThaiDayPart(hour),
+    displayDate: `${get("weekday")}ที่ ${get("day")} ${get("month")} ${get("year")}`,
+    displayTime: `${String(hour).padStart(2,"0")}:${minute}`
+  };
+}
+
+function updateRealtimeClock(){
+  const ctx = getCurrentTimeContext();
+
+  const dateEl = document.getElementById("realtimeClockDate");
+  const timeEl = document.getElementById("realtimeClockTime");
+  const periodEl = document.getElementById("realtimeClockPeriod");
+
+  if(dateEl) dateEl.textContent = ctx.displayDate;
+  if(timeEl) timeEl.textContent = ctx.displayTime;
+  if(periodEl) periodEl.textContent = `ช่วง${ctx.dayPart} · ${ctx.timezone}`;
+}
+
+function startRealtimeClock(){
+  updateRealtimeClock();
+  setInterval(updateRealtimeClock, 1000);
+}
+
+
 async function handleAiKcalMessage() {
   const input = document.getElementById("aiKcalMessage");
   const reply = document.getElementById("aiKcalReply");
@@ -3213,6 +3327,8 @@ setTimeout(() => {
 
 
 setTimeout(updateAiModelBadge, 0);
+
+startRealtimeClock();
 </script>
 
 
