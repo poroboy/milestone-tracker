@@ -11,3 +11,9 @@ index.broken-*.html
 
 # local README backup files
 README.before-*.md
+
+# Cloudflare Worker local secrets
+worker/.dev.vars
+worker/.wrangler/
+worker/node_modules/
+worker/dist/
