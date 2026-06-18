@@ -1828,6 +1828,7 @@ async function loadCloudState(user) {
       console.log("No cloud state found. Local state uploaded.");
     }
   } catch (err) {
+    console.error("AI chat error", err);
     console.error("Cloud load failed:", err);
   } finally {
     isCloudLoading = false;
