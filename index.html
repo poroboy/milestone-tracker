@@ -1236,6 +1236,23 @@
   .dash-daily-net.good{ color:var(--moss); }
   .dash-daily-net.warn{ color:#c9694e; }
 
+
+  .ai-model-badge{
+    font-family:'DM Mono', monospace;
+    font-size:10px;
+    color:var(--muted);
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:999px;
+    padding:4px 8px;
+    white-space:nowrap;
+  }
+  .ai-title-left{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+  }
 </style>
 </head>
 <body>
@@ -1764,6 +1781,7 @@ let state = {
 };
 
 let currentUser = null;
+let aiModelName = "auto";
 let cloudSaveTimer = null;
 let isCloudLoading = false;
 
@@ -2513,6 +2531,11 @@ async function handleAiKcalMessage() {
     });
 
     const data = await res.json();
+
+    if(data.model){
+      aiModelName = data.fallbackFrom ? `${data.model} fallback` : data.model;
+      updateAiModelBadge();
+    }
 
     if (!res.ok) {
       console.error(data);
