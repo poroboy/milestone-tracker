@@ -3,3 +3,8 @@ node_modules/
 .env
 .firebase/
 firebase-debug.log
+
+# local backup html files
+index.before-*.html
+index.backup*.html
+index.broken-*.html
