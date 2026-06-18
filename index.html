@@ -2483,6 +2483,13 @@ function clearAiChatHistory() {
   }
 }
 
+
+function updateAiModelBadge(){
+  const el = document.getElementById("aiModelBadge");
+  if(!el) return;
+  el.textContent = "model: " + (aiModelName || "auto");
+}
+
 async function handleAiKcalMessage() {
   const input = document.getElementById("aiKcalMessage");
   const reply = document.getElementById("aiKcalReply");
