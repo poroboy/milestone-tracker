@@ -872,14 +872,16 @@
     font-size:12px;
   }
   .day-log-row:last-child{ border-bottom:none; }
-  .day-log-row .date{ color:var(--muted); font-family:'DM Mono', monospace; width:50px; flex-shrink:0; }
+  .day-log-row .date{ color:var(--muted); font-family:'DM Mono', monospace; width:96px; flex-shrink:0; }
   .day-log-row .bar-wrap{
     flex:1; height:6px; background:#f0e9dc; border-radius:3px; margin:0 10px; overflow:hidden;
   }
   .day-log-row .bar{ height:100%; border-radius:3px; }
   .day-log-row .net{
-    font-family:'DM Mono', monospace; font-weight:700; width:60px; text-align:right; flex-shrink:0;
+    font-family:'DM Mono', monospace; font-weight:700; width:64px; text-align:right; flex-shrink:0;
   }
+  .day-log-row.today .date{ color:var(--ink); font-weight:800; }
+  .day-log-row.no-data .net{ color:var(--muted); }
   .day-log-row .net.deficit{ color:var(--moss); }
   .day-log-row .net.surplus{ color:#c9694e; }
 
@@ -2626,11 +2628,16 @@ document.getElementById('monthNextBtn').addEventListener('click', ()=>{
 });
 
 const thaiMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const thaiShortMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 function renderMonthSummary(){
   const y = kcalViewMonth.getFullYear();
   const m = kcalViewMonth.getMonth();
-  document.getElementById('monthLabel').textContent = thaiMonths[m] + ' ' + (y+543); // Buddhist era for Thai context
+  document.getElementById('monthLabel').textContent = thaiMonths[m] + ' ' + (y+543);
+
+  const now = new Date();
+  const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
+  const todayDay = now.getDate();
 
   const daysInMonth = new Date(y, m+1, 0).getDate();
   let totalNet = 0, daysLogged = 0;
@@ -2639,10 +2646,15 @@ function renderMonthSummary(){
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const t = dayTotals(dateStr);
-    if(t.hasData){
-      totalNet += t.net;
-      daysLogged++;
-      dayRows.push({ day:d, dateStr, ...t });
+    const isToday = isCurrentMonth && d === todayDay;
+
+    // โชว์วันที่มีข้อมูล + โชว์วันนี้เสมอ ถึงยังไม่มีข้อมูล
+    if(t.hasData || isToday){
+      if(t.hasData){
+        totalNet += t.net;
+        daysLogged++;
+      }
+      dayRows.push({ day:d, dateStr, isToday, ...t });
     }
   }
 
@@ -2653,22 +2665,27 @@ function renderMonthSummary(){
   const stat = document.getElementById('monthDeficitStat');
   stat.className = 'month-stat ' + (totalNet <= 0 ? 'deficit' : 'surplus');
 
-  // day list with bars
-  const maxAbs = Math.max(1, ...dayRows.map(r=>Math.abs(r.net)));
+  const maxAbs = Math.max(1, ...dayRows.filter(r=>r.hasData).map(r=>Math.abs(r.net)));
   const listEl = document.getElementById('monthDayList');
   listEl.innerHTML = '';
+
   if(dayRows.length === 0){
     listEl.innerHTML = '<div class="kcal-empty">ยังไม่มีข้อมูลเดือนนี้</div>';
   } else {
     dayRows.forEach(r=>{
       const row = document.createElement('div');
-      row.className = 'day-log-row';
-      const barPct = Math.min(100, Math.abs(r.net)/maxAbs*100);
-      const barColor = r.net <= 0 ? 'var(--moss)' : '#c9694e';
+      row.className = 'day-log-row' + (r.isToday ? ' today' : '') + (!r.hasData ? ' no-data' : '');
+
+      const barPct = r.hasData ? Math.min(100, Math.abs(r.net)/maxAbs*100) : 0;
+      const barColor = !r.hasData ? '#d9d0c2' : (r.net <= 0 ? 'var(--moss)' : '#c9694e');
+      const dateLabel = `${r.day} ${thaiShortMonths[m]}${r.isToday ? ' วันนี้' : ''}`;
+      const netLabel = r.hasData ? `${r.net>0?'+':''}${r.net}` : '–';
+
       row.innerHTML = `
-        <div class="date">${r.day}</div>
+        <div class="date">${dateLabel}</div>
         <div class="bar-wrap"><div class="bar" style="width:${barPct}%; background:${barColor};"></div></div>
-        <div class="net ${r.net<=0?'deficit':'surplus'}">${r.net>0?'+':''}${r.net}</div>`;
+        <div class="net ${r.hasData ? (r.net<=0?'deficit':'surplus') : ''}">${netLabel}</div>`;
+
       listEl.appendChild(row);
     });
   }
