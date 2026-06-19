@@ -1751,6 +1751,114 @@
     }
   }
 
+
+  /* energyCompactLayoutV3 */
+  #energyDashboardWrap{
+    max-width:520px !important;
+    width:100% !important;
+    margin:14px auto 92px !important;
+    padding:0 12px !important;
+    box-sizing:border-box !important;
+  }
+
+  #energyAnalyticsCard,
+  #energyChartCard{
+    background:#fffdf8 !important;
+    border:1px solid #e5d9c8 !important;
+    border-radius:18px !important;
+    padding:16px !important;
+    margin:12px 0 !important;
+    box-sizing:border-box !important;
+    overflow:hidden !important;
+  }
+
+  #energyAnalyticsCard .energy-title-row,
+  #energyChartCard .energy-title-row{
+    margin-bottom:12px !important;
+  }
+
+  #energyAnalyticsCard .energy-metric-grid{
+    display:grid !important;
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+    gap:0 !important;
+    border:1px solid #efe8da !important;
+    border-radius:14px !important;
+    overflow:hidden !important;
+    background:#fbf8f2 !important;
+    margin-top:10px !important;
+  }
+
+  #energyAnalyticsCard .energy-metric{
+    background:transparent !important;
+    border:0 !important;
+    border-radius:0 !important;
+    padding:12px !important;
+    min-height:58px !important;
+  }
+
+  #energyAnalyticsCard .energy-metric:nth-child(odd){
+    border-right:1px solid #efe8da !important;
+  }
+
+  #energyAnalyticsCard .energy-metric:nth-child(-n+4){
+    border-bottom:1px solid #efe8da !important;
+  }
+
+  #energyAnalyticsCard .energy-metric .label{
+    font-size:10px !important;
+    margin-bottom:4px !important;
+  }
+
+  #energyAnalyticsCard .energy-metric .value{
+    font-size:18px !important;
+  }
+
+  #energyAnalyticsCard .energy-note{
+    margin-top:10px !important;
+    border-radius:12px !important;
+  }
+
+  #energyChartCard .energy-chart-list{
+    max-height:340px !important;
+    overflow-y:auto !important;
+    padding-right:4px !important;
+  }
+
+  #energyChartCard .energy-chart-row{
+    padding:8px 0 !important;
+  }
+
+  #energyChartCard .energy-bar-line{
+    grid-template-columns:34px 1fr 52px !important;
+  }
+
+  @media(max-width:560px){
+    #energyDashboardWrap{
+      max-width:none !important;
+      margin:12px 0 92px !important;
+      padding:0 12px !important;
+    }
+
+    #energyAnalyticsCard,
+    #energyChartCard{
+      padding:14px !important;
+      border-radius:16px !important;
+    }
+
+    #energyAnalyticsCard .energy-metric-grid{
+      grid-template-columns:1fr !important;
+    }
+
+    #energyAnalyticsCard .energy-metric{
+      border-right:0 !important;
+      border-bottom:1px solid #efe8da !important;
+    }
+
+    #energyAnalyticsCard .energy-metric:last-child{
+      border-bottom:0 !important;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -4766,6 +4874,38 @@ document.addEventListener("click", function(e){
   if(!tab) return;
 
   setTimeout(startInlineWeightMountLoop, 250);
+});
+
+
+function compactEnergyAnalyticsPlacementV3(){
+  const wrap = document.getElementById("energyDashboardWrap");
+  if(!wrap) return;
+
+  const page = typeof findDashboardPageForEnergy === "function"
+    ? findDashboardPageForEnergy()
+    : (document.querySelector(".page.active") || document.body);
+
+  if(!page) return;
+
+  const cards = Array.from(page.querySelectorAll(".card"));
+  const insightCard = cards.find(card => {
+    const text = card.textContent || "";
+    return text.includes("วิเคราะห์ภาพรวม");
+  });
+
+  if(insightCard && insightCard.nextElementSibling !== wrap){
+    insightCard.insertAdjacentElement("afterend", wrap);
+  }
+}
+
+setTimeout(compactEnergyAnalyticsPlacementV3, 500);
+setTimeout(compactEnergyAnalyticsPlacementV3, 1200);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(compactEnergyAnalyticsPlacementV3, 300);
 });
 
 </script>
