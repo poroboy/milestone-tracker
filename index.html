@@ -6314,6 +6314,82 @@ document.addEventListener("click", function(e){
   setTimeout(enhanceDashboardOverviewMetabolicV1, 400);
 });
 
+
+window.overviewMetabolicDuplicateFixV2 = true;
+
+function cleanOverviewMetabolicHtmlV2(html){
+  return String(html || "").replace(
+    /<div class="overview-metabolic-extra"[\s\S]*?<\/div>\s*/g,
+    ""
+  );
+}
+
+function enhanceDashboardOverviewMetabolicV1(){
+  const card = findDashboardOverviewCardV1 ? findDashboardOverviewCardV1() : null;
+  if(!card) return;
+
+  // remove every previous duplicate first
+  card.querySelectorAll("#overviewMetabolicExtraV1, .overview-metabolic-extra").forEach(el => {
+    el.remove();
+  });
+
+  const candidates = Array.from(card.querySelectorAll("div")).filter(el => {
+    const text = el.textContent || "";
+    return (
+      text.includes("จากข้อมูลร่างกาย") ||
+      text.includes("TDEE แนะนำ") ||
+      text.includes("โปรตีนเฉลี่ย")
+    );
+  });
+
+  const box = candidates
+    .filter(el => !el.classList.contains("overview-metabolic-extra"))
+    .sort((a,b) => (a.textContent || "").length - (b.textContent || "").length)[0];
+
+  if(!box) return;
+
+  if(!box.dataset.cleanBaseOverviewHtmlV2){
+    box.dataset.cleanBaseOverviewHtmlV2 = cleanOverviewMetabolicHtmlV2(box.innerHTML);
+  }
+
+  box.innerHTML = box.dataset.cleanBaseOverviewHtmlV2;
+
+  const m = getOverviewMetabolicMonthV1 ? getOverviewMetabolicMonthV1() : null;
+  if(!m) return;
+
+  const extra = document.createElement("div");
+  extra.className = "overview-metabolic-extra";
+  extra.id = "overviewMetabolicExtraV1";
+
+  extra.innerHTML = `
+    <div class="overview-metabolic-title">• วิเคราะห์แป้ง / น้ำตาล / อินซูลินโดยประมาณ</div>
+    <div>• เดือนนี้แป้งรวมประมาณ ${overviewMetabolicNumV1(m.totalCarb)}g, net carb ${overviewMetabolicNumV1(m.netCarb)}g, น้ำตาล ${overviewMetabolicNumV1(m.totalSugar)}g, ไฟเบอร์ ${overviewMetabolicNumV1(m.totalFiber)}g</div>
+    <div>• คุณภาพแป้งโดยรวม: ${m.quality} — ${m.advice}</div>
+    <div>• มื้อเสี่ยงน้ำตาลพุ่งสูง: ${m.highCount} มื้อ จากข้อมูลอาหาร ${m.foodDays} วัน</div>
+  `;
+
+  box.appendChild(extra);
+
+  // safety cleanup: if old patch creates another one outside this box, remove it
+  card.querySelectorAll("#overviewMetabolicExtraV1, .overview-metabolic-extra").forEach(el => {
+    if(el !== extra) el.remove();
+  });
+}
+
+function runOverviewMetabolicDuplicateFixV2(){
+  setTimeout(enhanceDashboardOverviewMetabolicV1, 100);
+  setTimeout(enhanceDashboardOverviewMetabolicV1, 500);
+  setTimeout(enhanceDashboardOverviewMetabolicV1, 1200);
+}
+
+runOverviewMetabolicDuplicateFixV2();
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+  setTimeout(runOverviewMetabolicDuplicateFixV2, 300);
+});
+
 </script>
 
 
