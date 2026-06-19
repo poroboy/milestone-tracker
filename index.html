@@ -1526,6 +1526,8 @@
 
   .dashboard-weight-recorder-card{
     margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid #efe8da;
   }
   .dashboard-weight-recorder-card .weight-recorder-grid{
     display:grid;
@@ -4210,25 +4212,28 @@ function findBodyProfileCardForWeightRecorder(page){
   }) || null;
 }
 
+
 function ensureDashboardWeightRecorder(){
   const page = findDashboardPageForWeightRecorder();
   if(!page) return;
 
+  const profileCard = findBodyProfileCardForWeightRecorder(page);
+  if(!profileCard) return;
+
   let card = document.getElementById("dashboardWeightRecorderCard");
+
+  // ถ้าเคยถูกสร้างเป็น card แยกด้านนอก ให้ย้ายเข้ามาในกล่องข้อมูลร่างกาย
+  if(card && !profileCard.contains(card)){
+    card.remove();
+    card = null;
+  }
 
   if(!card){
     card = document.createElement("div");
-    card.className = "card dashboard-weight-recorder-card";
+    card.className = "dashboard-weight-recorder-card";
     card.id = "dashboardWeightRecorderCard";
 
     card.innerHTML = `
-      <div class="energy-title-row">
-        <div>
-          <div class="energy-title">⚖️ บันทึกน้ำหนักปัจจุบัน</div>
-          <div class="energy-subtitle">ใช้คำนวณ BMI / BMR / TDEE และเทียบน้ำหนักจริงจากบันทึก</div>
-        </div>
-      </div>
-
       <div class="weight-recorder-grid">
         <div class="weight-recorder-field">
           <label>น้ำหนักปัจจุบัน (kg)</label>
@@ -4242,15 +4247,19 @@ function ensureDashboardWeightRecorder(){
       </div>
 
       <div class="weight-recorder-note">
-        ระบบจะอัปเดตน้ำหนักเดียวกับหน้าหลัก และบันทึกน้ำหนักของวันนี้เข้า history เพื่อใช้เทียบกับน้ำหนักครั้งก่อน
+        น้ำหนักนี้ใช้ร่วมกับหน้าหลัก เพื่อคำนวณ BMI / BMR / TDEE และบันทึกเข้า history สำหรับเทียบน้ำหนักจริง
       </div>
     `;
 
-    const profileCard = findBodyProfileCardForWeightRecorder(page);
-    if(profileCard){
-      profileCard.insertAdjacentElement("afterend", card);
+    const profileResultBox = Array.from(profileCard.children).find(el => {
+      const text = el.textContent || "";
+      return text.includes("BMI:") || text.includes("BMR โดยประมาณ") || text.includes("TDEE แนะนำ");
+    });
+
+    if(profileResultBox){
+      profileResultBox.insertAdjacentElement("beforebegin", card);
     }else{
-      page.appendChild(card);
+      profileCard.appendChild(card);
     }
   }
 
@@ -4263,6 +4272,7 @@ function ensureDashboardWeightRecorder(){
 
   updateDashboardWeightRecorderSummary();
 }
+
 
 function updateDashboardWeightRecorderSummary(){
   const el = document.getElementById("dashboardWeightRecorderSummary");
