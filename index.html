@@ -6066,6 +6066,91 @@ document.addEventListener("click", function(e){
   setTimeout(startInsulinCardCenterFixV2, 300);
 });
 
+
+window.aiMetabolicRefreshFixV1 = true;
+
+function normalizeTodayFoodMetabolicNow(){
+  if(typeof getDayLog !== "function" || typeof todayStr !== "function") return;
+
+  const log = getDayLog(todayStr());
+  if(!log || !Array.isArray(log.food)) return;
+
+  log.food.forEach(item => {
+    if(typeof normalizeFoodMetabolicItem === "function"){
+      normalizeFoodMetabolicItem(item);
+    }
+  });
+}
+
+function refreshMetabolicInsightAfterAi(){
+  normalizeTodayFoodMetabolicNow();
+
+  if(typeof saveState === "function"){
+    saveState();
+  }
+
+  if(typeof renderKcalInsulinInsight === "function"){
+    renderKcalInsulinInsight();
+  }
+
+  if(typeof renderDashboardInsulinInsight === "function"){
+    renderDashboardInsulinInsight();
+  }
+
+  if(typeof renderKcalPage === "function"){
+    renderKcalPage();
+  }
+
+  if(typeof renderDashboard === "function"){
+    renderDashboard();
+  }
+
+  setTimeout(() => {
+    normalizeTodayFoodMetabolicNow();
+
+    if(typeof renderKcalInsulinInsight === "function"){
+      renderKcalInsulinInsight();
+    }
+
+    if(typeof renderDashboardInsulinInsight === "function"){
+      renderDashboardInsulinInsight();
+    }
+
+    if(typeof saveState === "function"){
+      saveState();
+    }
+  }, 400);
+}
+
+// wrap AI handler so metabolic UI updates immediately after AI logs food
+if(typeof handleAiKcalMessage === "function" && !handleAiKcalMessage.__metabolicRefreshWrapped){
+  const originalHandleAiKcalMessage = handleAiKcalMessage;
+
+  handleAiKcalMessage = async function(...args){
+    const result = await originalHandleAiKcalMessage.apply(this, args);
+
+    refreshMetabolicInsightAfterAi();
+
+    return result;
+  };
+
+  handleAiKcalMessage.__metabolicRefreshWrapped = true;
+}
+
+// also watch food list changes from AI/manual render
+setTimeout(() => {
+  const foodList = document.getElementById("foodLogList");
+  if(!foodList || foodList.__metabolicObserverReady) return;
+
+  foodList.__metabolicObserverReady = true;
+
+  const observer = new MutationObserver(() => {
+    setTimeout(refreshMetabolicInsightAfterAi, 150);
+  });
+
+  observer.observe(foodList, { childList: true, subtree: true });
+}, 800);
+
 </script>
 
 
