@@ -2041,6 +2041,90 @@
     }
   }
 
+
+  /* insulinInsightV1 */
+  .insulin-insight-card{
+    margin-top:12px;
+  }
+  .insulin-grid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:8px;
+    margin-top:10px;
+  }
+  .insulin-metric{
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:13px;
+    padding:10px;
+  }
+  .insulin-metric .label{
+    font-size:10px;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  .insulin-metric .value{
+    font-size:18px;
+    font-weight:900;
+    color:var(--ink);
+    font-family:'DM Mono',monospace;
+  }
+  .insulin-risk-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:999px;
+    padding:6px 10px;
+    font-size:11px;
+    font-weight:900;
+    margin-top:8px;
+  }
+  .insulin-risk-low{
+    background:#eef7ee;
+    color:#4f855f;
+  }
+  .insulin-risk-medium{
+    background:#fff4df;
+    color:#a36a18;
+  }
+  .insulin-risk-high{
+    background:#fff1ec;
+    color:#b94c2f;
+  }
+  .insulin-note{
+    margin-top:9px;
+    font-size:11px;
+    line-height:1.55;
+    color:var(--muted);
+    background:#fffaf2;
+    border:1px solid #f0e5d4;
+    border-radius:12px;
+    padding:10px;
+  }
+  .manual-carb-grid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:8px;
+    margin:8px 0;
+  }
+  .manual-carb-grid input{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid #e4d8c8;
+    background:#fffaf2;
+    border-radius:10px;
+    padding:10px 11px;
+    font-family:'Prompt',sans-serif;
+    font-size:12px;
+    outline:none;
+  }
+  @media(max-width:430px){
+    .insulin-grid,
+    .manual-carb-grid{
+      grid-template-columns:1fr;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -5363,6 +5447,349 @@ document.addEventListener("click", function(e){
 setInterval(() => {
   dashboardFinalStackV9();
 }, 2500);
+
+
+function toMacroNumber(value){
+  const n = Number(value);
+  return isNaN(n) ? 0 : Math.max(0, n);
+}
+
+function estimateGlucoseSpikeRisk(food){
+  const carb = toMacroNumber(food.carb ?? food.carbs ?? food.carbohydrate);
+  const sugar = toMacroNumber(food.sugar);
+  const fiber = toMacroNumber(food.fiber);
+  const protein = toMacroNumber(food.protein);
+
+  if(carb >= 70 || sugar >= 25 || (carb >= 50 && fiber < 3 && protein < 15)){
+    return "high";
+  }
+
+  if(carb >= 35 || sugar >= 12 || (carb >= 25 && fiber < 2 && protein < 10)){
+    return "medium";
+  }
+
+  return "low";
+}
+
+function riskLabelTH(risk){
+  if(risk === "high") return "สูง";
+  if(risk === "medium") return "กลาง";
+  return "ต่ำ";
+}
+
+function normalizeFoodMetabolicItem(food){
+  if(!food || typeof food !== "object") return food;
+
+  const next = food;
+  next.carb = toMacroNumber(next.carb ?? next.carbs ?? next.carbohydrate);
+  next.sugar = toMacroNumber(next.sugar);
+  next.fiber = toMacroNumber(next.fiber);
+
+  if(!next.spikeRisk && !next.glucoseSpikeRisk){
+    next.spikeRisk = estimateGlucoseSpikeRisk(next);
+  }else{
+    next.spikeRisk = next.spikeRisk || next.glucoseSpikeRisk;
+  }
+
+  return next;
+}
+
+function getTodayMetabolicTotals(dateStr = todayStr()){
+  const log = getDayLog(dateStr);
+  const food = Array.isArray(log.food) ? log.food.map(normalizeFoodMetabolicItem) : [];
+
+  const totalCarb = food.reduce((sum, item) => sum + toMacroNumber(item.carb), 0);
+  const totalSugar = food.reduce((sum, item) => sum + toMacroNumber(item.sugar), 0);
+  const totalFiber = food.reduce((sum, item) => sum + toMacroNumber(item.fiber), 0);
+
+  const highCount = food.filter(item => (item.spikeRisk || estimateGlucoseSpikeRisk(item)) === "high").length;
+  const mediumCount = food.filter(item => (item.spikeRisk || estimateGlucoseSpikeRisk(item)) === "medium").length;
+
+  let dayRisk = "low";
+  if(highCount >= 1 || totalSugar >= 35 || totalCarb >= 140) dayRisk = "high";
+  else if(mediumCount >= 1 || totalSugar >= 18 || totalCarb >= 80) dayRisk = "medium";
+
+  return {
+    food,
+    totalCarb,
+    totalSugar,
+    totalFiber,
+    highCount,
+    mediumCount,
+    dayRisk
+  };
+}
+
+function ensureKcalInsulinInsightCard(){
+  const page =
+    document.getElementById("pageKcal") ||
+    Array.from(document.querySelectorAll(".page")).find(page => (page.textContent || "").includes("สมดุลแคลอรี่")) ||
+    document.querySelector(".page.active");
+
+  if(!page) return null;
+
+  let card = document.getElementById("kcalInsulinInsightCard");
+  if(card) return card;
+
+  card = document.createElement("div");
+  card.className = "kcal-input-card insulin-insight-card";
+  card.id = "kcalInsulinInsightCard";
+  card.innerHTML = `
+    <div class="kcal-input-title">🍚 Carb / Sugar Insight วันนี้</div>
+    <div class="insulin-grid">
+      <div class="insulin-metric">
+        <div class="label">แป้งโดยประมาณ</div>
+        <div class="value" id="todayCarbTotal">0g</div>
+      </div>
+      <div class="insulin-metric">
+        <div class="label">น้ำตาลโดยประมาณ</div>
+        <div class="value" id="todaySugarTotal">0g</div>
+      </div>
+      <div class="insulin-metric">
+        <div class="label">ไฟเบอร์โดยประมาณ</div>
+        <div class="value" id="todayFiberTotal">0g</div>
+      </div>
+    </div>
+    <div id="todaySpikeRiskPill" class="insulin-risk-pill insulin-risk-low">Glucose spike risk: ต่ำ</div>
+    <div class="insulin-note" id="todayInsulinNote">
+      ระบบประเมินจาก carb / sugar / fiber / protein ของรายการอาหาร ไม่ใช่การวัดน้ำตาลหรืออินซูลินจริง
+    </div>
+  `;
+
+  const dataTools = document.querySelector(".data-tools-card");
+  if(dataTools && dataTools.parentElement === page){
+    dataTools.insertAdjacentElement("beforebegin", card);
+  }else{
+    page.appendChild(card);
+  }
+
+  return card;
+}
+
+function renderKcalInsulinInsight(){
+  const card = ensureKcalInsulinInsightCard();
+  if(!card) return;
+
+  const t = getTodayMetabolicTotals();
+
+  const carbEl = document.getElementById("todayCarbTotal");
+  const sugarEl = document.getElementById("todaySugarTotal");
+  const fiberEl = document.getElementById("todayFiberTotal");
+  const pill = document.getElementById("todaySpikeRiskPill");
+  const note = document.getElementById("todayInsulinNote");
+
+  if(carbEl) carbEl.textContent = `${Math.round(t.totalCarb)}g`;
+  if(sugarEl) sugarEl.textContent = `${Math.round(t.totalSugar)}g`;
+  if(fiberEl) fiberEl.textContent = `${Math.round(t.totalFiber)}g`;
+
+  if(pill){
+    pill.className = `insulin-risk-pill insulin-risk-${t.dayRisk}`;
+    pill.textContent = `Glucose spike risk: ${riskLabelTH(t.dayRisk)}`;
+  }
+
+  if(note){
+    if(t.food.length === 0){
+      note.textContent = "ยังไม่มีรายการอาหารวันนี้ ถ้าให้ AI ช่วยบันทึก ระบบจะประเมินแป้ง น้ำตาล ไฟเบอร์ และความเสี่ยงน้ำตาลพุ่งให้ด้วย";
+    }else if(t.dayRisk === "high"){
+      note.textContent = "วันนี้มีแนวโน้ม glucose spike สูง แนะนำเลี่ยงน้ำหวาน/ของหวานเพิ่ม และถ้าเหมาะกับร่างกาย ลองเดินเบา ๆ หลังมื้อ 10–15 นาที";
+    }else if(t.dayRisk === "medium"){
+      note.textContent = "วันนี้อยู่ระดับกลาง คุมได้ดีขึ้นด้วยการกินแป้งคู่โปรตีน/ผัก และลดน้ำตาลเหลว เช่น ชานม น้ำหวาน น้ำอัดลม";
+    }else{
+      note.textContent = "วันนี้ความเสี่ยงน้ำตาลพุ่งค่อนข้างต่ำ โดยดูจากข้อมูลที่มี โปรตีนและไฟเบอร์ช่วยให้มื้ออาหารนิ่งขึ้น";
+    }
+  }
+}
+
+function mountManualFoodMacroFields(){
+  const cards = Array.from(document.querySelectorAll(".kcal-input-card, .card"));
+  const foodCard = cards.find(card => {
+    const text = card.textContent || "";
+    return text.includes("กินเข้าไป") && text.includes("เพิ่มรายการอาหาร");
+  });
+
+  if(!foodCard || document.getElementById("manualCarbFieldsV1")) return;
+
+  const fields = document.createElement("div");
+  fields.id = "manualCarbFieldsV1";
+  fields.className = "manual-carb-grid";
+  fields.innerHTML = `
+    <input id="manualCarbInput" type="number" min="0" step="1" inputmode="numeric" placeholder="แป้ง g">
+    <input id="manualSugarInput" type="number" min="0" step="1" inputmode="numeric" placeholder="น้ำตาล g">
+    <input id="manualFiberInput" type="number" min="0" step="1" inputmode="numeric" placeholder="ไฟเบอร์ g">
+  `;
+
+  const logList = foodCard.querySelector(".kcal-log-list");
+  if(logList){
+    logList.insertAdjacentElement("beforebegin", fields);
+  }else{
+    foodCard.appendChild(fields);
+  }
+}
+
+function patchLastManualFoodMacroIfNeeded(){
+  const carbInput = document.getElementById("manualCarbInput");
+  const sugarInput = document.getElementById("manualSugarInput");
+  const fiberInput = document.getElementById("manualFiberInput");
+
+  if(!carbInput || !sugarInput || !fiberInput) return;
+
+  const carb = toMacroNumber(carbInput.value);
+  const sugar = toMacroNumber(sugarInput.value);
+  const fiber = toMacroNumber(fiberInput.value);
+
+  if(carb === 0 && sugar === 0 && fiber === 0) return;
+
+  const log = getDayLog(todayStr());
+  if(!Array.isArray(log.food) || log.food.length === 0) return;
+
+  const last = log.food[log.food.length - 1];
+  if(!last || last.carb || last.sugar || last.fiber) return;
+
+  last.carb = carb;
+  last.sugar = sugar;
+  last.fiber = fiber;
+  last.spikeRisk = estimateGlucoseSpikeRisk(last);
+
+  carbInput.value = "";
+  sugarInput.value = "";
+  fiberInput.value = "";
+
+  saveState();
+  renderKcalInsulinInsight();
+  if(typeof renderDashboard === "function") renderDashboard();
+}
+
+document.addEventListener("click", function(e){
+  const foodCard = e.target.closest ? e.target.closest(".kcal-input-card, .card") : null;
+  if(!foodCard) return;
+
+  const text = foodCard.textContent || "";
+  if(text.includes("กินเข้าไป") && text.includes("เพิ่มรายการอาหาร")){
+    setTimeout(patchLastManualFoodMacroIfNeeded, 200);
+  }
+});
+
+function getMetabolicRows(){
+  const days = state.kcalDays || {};
+  const rows = [];
+
+  Object.keys(days).sort().forEach(dateStr => {
+    const log = getDayLog(dateStr);
+    const food = Array.isArray(log.food) ? log.food.map(normalizeFoodMetabolicItem) : [];
+
+    const totalCarb = food.reduce((sum, item) => sum + toMacroNumber(item.carb), 0);
+    const totalSugar = food.reduce((sum, item) => sum + toMacroNumber(item.sugar), 0);
+    const totalFiber = food.reduce((sum, item) => sum + toMacroNumber(item.fiber), 0);
+    const highCount = food.filter(item => (item.spikeRisk || estimateGlucoseSpikeRisk(item)) === "high").length;
+
+    if(food.length){
+      rows.push({ dateStr, food, totalCarb, totalSugar, totalFiber, highCount });
+    }
+  });
+
+  return rows;
+}
+
+function ensureDashboardInsulinInsightCard(){
+  const stack =
+    document.getElementById("dashboardFinalAnalysisStackV9") ||
+    document.getElementById("dashboardAnalysisColumnFinal") ||
+    document.getElementById("dashboardAnalysisColumnV6") ||
+    (typeof findDashboardPageForEnergy === "function" ? findDashboardPageForEnergy() : null) ||
+    document.querySelector(".page.active");
+
+  if(!stack) return null;
+
+  let card = document.getElementById("dashboardInsulinInsightCard");
+  if(card) return card;
+
+  card = document.createElement("div");
+  card.className = "card insulin-insight-card";
+  card.id = "dashboardInsulinInsightCard";
+  card.innerHTML = `
+    <div class="energy-title-row">
+      <div>
+        <div class="energy-title">🍚 Glucose / Insulin Insight</div>
+        <div class="energy-subtitle">ดูคุณภาพ kcal จากแป้ง น้ำตาล ไฟเบอร์ และความเสี่ยงน้ำตาลพุ่ง</div>
+      </div>
+    </div>
+    <div class="insulin-grid">
+      <div class="insulin-metric">
+        <div class="label">แป้งเดือนนี้</div>
+        <div class="value" id="dashCarbTotal">0g</div>
+      </div>
+      <div class="insulin-metric">
+        <div class="label">น้ำตาลเดือนนี้</div>
+        <div class="value" id="dashSugarTotal">0g</div>
+      </div>
+      <div class="insulin-metric">
+        <div class="label">มื้อเสี่ยงสูง</div>
+        <div class="value" id="dashHighSpikeMeals">0</div>
+      </div>
+    </div>
+    <div class="insulin-note" id="dashInsulinNote">
+      ระบบประเมินแนวโน้มจากข้อมูลอาหาร ไม่ใช่ค่าทางการแพทย์
+    </div>
+  `;
+
+  const energyWrap = document.getElementById("energyDashboardWrap");
+  if(energyWrap && energyWrap.parentElement === stack){
+    energyWrap.insertAdjacentElement("beforebegin", card);
+  }else{
+    stack.appendChild(card);
+  }
+
+  return card;
+}
+
+function renderDashboardInsulinInsight(){
+  const card = ensureDashboardInsulinInsightCard();
+  if(!card) return;
+
+  const ym = typeof getEnergySelectedYm === "function" ? getEnergySelectedYm() : todayStr().slice(0, 7);
+  const rows = getMetabolicRows().filter(r => r.dateStr.startsWith(ym));
+
+  const totalCarb = rows.reduce((sum, r) => sum + r.totalCarb, 0);
+  const totalSugar = rows.reduce((sum, r) => sum + r.totalSugar, 0);
+  const totalFiber = rows.reduce((sum, r) => sum + r.totalFiber, 0);
+  const highMeals = rows.reduce((sum, r) => sum + r.highCount, 0);
+  const foodDays = rows.length;
+
+  const carbEl = document.getElementById("dashCarbTotal");
+  const sugarEl = document.getElementById("dashSugarTotal");
+  const highEl = document.getElementById("dashHighSpikeMeals");
+  const noteEl = document.getElementById("dashInsulinNote");
+
+  if(carbEl) carbEl.textContent = `${Math.round(totalCarb)}g`;
+  if(sugarEl) sugarEl.textContent = `${Math.round(totalSugar)}g`;
+  if(highEl) highEl.textContent = `${highMeals}`;
+
+  if(noteEl){
+    if(foodDays === 0){
+      noteEl.textContent = "ยังไม่มีข้อมูลอาหารที่มี carb/sugar/fiber ในเดือนนี้ ลองให้ AI ช่วยบันทึกอาหาร หรือใส่แป้ง/น้ำตาล/ไฟเบอร์ตอนเพิ่มอาหารเอง";
+    }else if(highMeals > 0 || totalSugar >= 80){
+      noteEl.textContent = "เดือนนี้มีบางมื้อที่เสี่ยงน้ำตาลพุ่งสูง ลองลดน้ำหวาน/ของหวาน เลือกแป้งไม่ขัดสี เพิ่มโปรตีนและผักในมื้อหลัก";
+    }else{
+      noteEl.textContent = `เดือนนี้มีข้อมูล ${foodDays} วัน แป้งรวมประมาณ ${Math.round(totalCarb)}g น้ำตาลรวมประมาณ ${Math.round(totalSugar)}g ไฟเบอร์รวมประมาณ ${Math.round(totalFiber)}g`;
+    }
+  }
+}
+
+function refreshInsulinInsightUI(){
+  mountManualFoodMacroFields();
+  renderKcalInsulinInsight();
+  renderDashboardInsulinInsight();
+}
+
+setTimeout(refreshInsulinInsightUI, 500);
+setTimeout(refreshInsulinInsightUI, 1500);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(refreshInsulinInsightUI, 300);
+});
 
 </script>
 

@@ -214,6 +214,12 @@ Important behavior:
 - If the user clearly says they exercised, create exercise log items.
 - If the message is mixed, answer the question and create log items.
 - For food items, estimate protein in grams and return protein as a number.
+- Estimate carbohydrate, sugar, and fiber in grams for food items.
+- For food items, return carb, sugar, fiber, and spikeRisk.
+- spikeRisk means estimated glucose spike risk, not actual insulin measurement.
+- Use spikeRisk values: "low", "medium", or "high".
+- High risk examples: sweet drinks, desserts, large white rice/noodle portions, low fiber + high sugar meals.
+- Lower risk examples: protein-rich meals with vegetables, higher fiber carbs, low sugar meals.
 - For exercise items, protein should be 0.
 - If protein is unclear, estimate based on a normal portion.
 - If a food/exercise item already exists in today's log and the user says it as context such as "กินไปแล้ว", "ทำไปแล้ว", "เมื่อกี้", or asks advice based on it, do not create a duplicate log item.
@@ -253,7 +259,7 @@ Required JSON schema:
       "category": "food" | "exercise",
       "name": "string",
       "kcal": number,
-      "protein": number,
+      "protein": number, "carb": number, "sugar": number, "fiber": number, "spikeRisk": "low" | "medium" | "high",
       "confidence": "low" | "medium" | "high",
       "note": "short Thai note"
     }

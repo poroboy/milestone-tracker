@@ -20,6 +20,13 @@ Live app: https://poroboy.github.io/milestone-tracker/
 - Monthly kcal summary
 - Daily history by selected month
 
+### Glucose / Insulin Insight
+- Estimates carb, sugar, and fiber for food logs
+- Shows daily carb and sugar insight on the kcal page
+- Shows monthly glucose spike risk summary on the dashboard
+- Uses estimated glucose spike risk: low, medium, or high
+- This is not a medical insulin or blood glucose measurement
+
 ### AI Health Chat
 - AI chat for food, kcal, protein, workout, and health suggestions
 - Auto log food and exercise from natural language
