@@ -3615,17 +3615,58 @@ function getWeightChangeForEnergy(){
   };
 }
 
+
+function findDashboardPageForEnergy(){
+  const directIds = [
+    "pageDashboard",
+    "dashboardPage",
+    "pageDash",
+    "dashboard"
+  ];
+
+  for(const id of directIds){
+    const el = document.getElementById(id);
+    if(el) return el.classList.contains("page") ? el : (el.closest(".page") || el);
+  }
+
+  const dashboardSelectors = [
+    "#dashYearLabel",
+    "#dashMonthlyList",
+    "#dashDailyList",
+    "#dashProteinList",
+    "#dashWeightList",
+    "#dashInsightText",
+    "#dashboardYearLabel",
+    ".dash-daily-list",
+    ".dash-monthly-list",
+    ".dashboard-card"
+  ];
+
+  for(const selector of dashboardSelectors){
+    const el = document.querySelector(selector);
+    if(!el) continue;
+
+    const page = el.closest(".page");
+    if(page) return page;
+  }
+
+  const pages = Array.from(document.querySelectorAll(".page"));
+  const dashboardPage = pages.find(page => {
+    const text = page.textContent || "";
+    return text.includes("Dashboard ความคืบหน้า") ||
+           text.includes("ภาพรวมสุขภาพ") ||
+           text.includes("ข้อมูลร่างกายและค่าแนะนำ") ||
+           text.includes("สรุปรายเดือนทั้งปี");
+  });
+
+  if(dashboardPage) return dashboardPage;
+
+  const activePage = document.querySelector(".page.active");
+  return activePage || document.body;
+}
+
 function ensureEnergyAnalyticsCard(){
-  const anyDashEl =
-    document.querySelector(".dash-daily-list") ||
-    document.querySelector("[id^='dash']") ||
-    document.getElementById("dashboardMonthSelect");
-
-  const page =
-    document.getElementById("pageDashboard") ||
-    document.getElementById("dashboardPage") ||
-    (anyDashEl ? anyDashEl.closest(".page") : null);
-
+  const page = findDashboardPageForEnergy();
   if(!page) return null;
 
   if(document.getElementById("energyAnalyticsCard")){
@@ -3696,6 +3737,7 @@ function ensureEnergyAnalyticsCard(){
   page.appendChild(wrap);
   return document.getElementById("energyAnalyticsCard");
 }
+
 
 function renderEnergyAnalyticsDashboard(){
   const card = ensureEnergyAnalyticsCard();
@@ -4040,6 +4082,26 @@ setTimeout(updateAiModelBadge, 0);
 startRealtimeClock();
 
 setTimeout(setupMonthDayListAutoScroll, 0);
+
+window.energyAnalyticsMountFixV1 = true;
+
+setTimeout(() => {
+  if(typeof renderEnergyAnalyticsDashboard === "function"){
+    renderEnergyAnalyticsDashboard();
+  }
+}, 300);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(() => {
+    if(typeof renderEnergyAnalyticsDashboard === "function"){
+      renderEnergyAnalyticsDashboard();
+    }
+  }, 120);
+});
+
 </script>
 
 
