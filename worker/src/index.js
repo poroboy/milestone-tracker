@@ -46,6 +46,122 @@ function isValidAiJson(parsed) {
     && Array.isArray(parsed.suggestions);
 }
 
+
+function toMacroNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function estimateFoodMetabolicFallback(item) {
+  const name = String(item?.name || "").toLowerCase();
+  const kcal = toMacroNumber(item?.kcal);
+  const protein = toMacroNumber(item?.protein);
+
+  const hasSweetDrink = /ชานม|ชาไทย|น้ำหวาน|น้ำอัดลม|โกโก้|กาแฟหวาน|น้ำผลไม้|หวาน|ไซรัป|นมเย็น/.test(name);
+  const hasDessert = /เค้ก|ขนม|โดนัท|คุกกี้|ไอศกรีม|บิงซู|บราวนี่|พาย|ครัวซองต์/.test(name);
+  const hasRice = /ข้าว|ข้าวหุง|ข้าวสวย|ข้าวเปล่า|ข้าวเหนียว/.test(name);
+  const hasNoodle = /เส้น|ก๋วยเตี๋ยว|บะหมี่|ราเมน|พาสต้า|สปาเกตตี|มาม่า/.test(name);
+  const hasBread = /ขนมปัง|แซนด์วิช|โรตี|แป้ง|พิซซ่า|เบอร์เกอร์/.test(name);
+  const hasStarchy = /มันฝรั่ง|มันหวาน|เผือก|ข้าวโพด/.test(name);
+  const hasVeg = /ผัก|กะหล่ำ|แครอท|บรอก|คะน้า|ผักบุ้ง|สลัด|เห็ด|แตง|มะเขือ/.test(name);
+  const proteinOnly = /อกไก่|ไก่|หมู|เนื้อ|ปลา|ไข่|เวย์|โปรตีน|เต้าหู้/.test(name) &&
+    !(hasRice || hasNoodle || hasBread || hasStarchy || hasSweetDrink || hasDessert);
+
+  let carb = 0;
+  let sugar = 0;
+  let fiber = 0;
+
+  if (hasRice) {
+    carb = Math.max(carb, Math.round((kcal * 0.88) / 4));
+    fiber = Math.max(fiber, 1);
+  }
+
+  if (hasNoodle || hasBread || hasStarchy) {
+    carb = Math.max(carb, Math.round((kcal * 0.65) / 4));
+    sugar = Math.max(sugar, hasBread ? 4 : 1);
+    fiber = Math.max(fiber, 1);
+  }
+
+  if (hasVeg) {
+    carb = Math.max(carb, Math.min(12, Math.round(Math.max(5, kcal * 0.35 / 4))));
+    sugar = Math.max(sugar, 2);
+    fiber = Math.max(fiber, 2);
+  }
+
+  if (hasSweetDrink) {
+    sugar = Math.max(sugar, Math.round((kcal * 0.75) / 4));
+    carb = Math.max(carb, sugar);
+  }
+
+  if (hasDessert) {
+    carb = Math.max(carb, Math.round((kcal * 0.6) / 4));
+    sugar = Math.max(sugar, Math.round((kcal * 0.32) / 4));
+    fiber = Math.max(fiber, 1);
+  }
+
+  if (carb === 0 && kcal > 0 && !proteinOnly) {
+    const residual = Math.max(0, kcal - protein * 4);
+    carb = Math.round((residual * 0.35) / 4);
+  }
+
+  sugar = Math.max(0, Math.min(sugar, carb));
+  fiber = Math.max(0, Math.min(fiber, carb));
+
+  return { carb, sugar, fiber };
+}
+
+function estimateGlucoseSpikeRisk(item) {
+  const carb = toMacroNumber(item.carb ?? item.carbs ?? item.carbohydrate);
+  const sugar = toMacroNumber(item.sugar);
+  const fiber = toMacroNumber(item.fiber);
+  const protein = toMacroNumber(item.protein);
+
+  if (carb >= 70 || sugar >= 25 || (carb >= 50 && fiber < 3 && protein < 15)) return "high";
+  if (carb >= 35 || sugar >= 12 || (carb >= 25 && fiber < 2 && protein < 10)) return "medium";
+  return "low";
+}
+
+function normalizeMetabolicItems(parsed) {
+  if (!parsed || !Array.isArray(parsed.items)) return parsed;
+
+  parsed.items = parsed.items.map(item => {
+    if (!item || item.type !== "food") return item;
+
+    const hasAny =
+      item.carb !== undefined ||
+      item.carbs !== undefined ||
+      item.carbohydrate !== undefined ||
+      item.sugar !== undefined ||
+      item.fiber !== undefined;
+
+    let carb;
+    let sugar;
+    let fiber;
+
+    if (hasAny) {
+      carb = toMacroNumber(item.carb ?? item.carbs ?? item.carbohydrate);
+      sugar = toMacroNumber(item.sugar);
+      fiber = toMacroNumber(item.fiber);
+    } else {
+      const estimated = estimateFoodMetabolicFallback(item);
+      carb = estimated.carb;
+      sugar = estimated.sugar;
+      fiber = estimated.fiber;
+      item.metabolicEstimated = true;
+    }
+
+    item.carb = carb;
+    item.sugar = sugar;
+    item.fiber = fiber;
+    item.spikeRisk = item.spikeRisk || item.glucoseSpikeRisk || estimateGlucoseSpikeRisk(item);
+
+    return item;
+  });
+
+  return parsed;
+}
+
+
 async function callGeminiModel(model, prompt, env) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
