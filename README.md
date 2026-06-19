@@ -53,10 +53,12 @@ If the first model is unavailable or in high demand, the Worker automatically fa
 - Monthly protein trend
 - Daily history by selected month
 - Weight history
+- Dashboard weight recorder linked to current weight and weight history
 - Health progress insight
 - Body profile fields:
   - gender
   - age
+  - current weight
   - height
   - baseline activity
 - Estimated BMI, BMR, TDEE, and protein target

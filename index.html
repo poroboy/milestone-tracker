@@ -1523,6 +1523,71 @@
     }
   }
 
+
+  .dashboard-weight-recorder-card{
+    margin-top:14px;
+  }
+  .dashboard-weight-recorder-card .weight-recorder-grid{
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:10px;
+    align-items:end;
+    margin-top:10px;
+  }
+  .dashboard-weight-recorder-card .weight-recorder-field label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:5px;
+  }
+  .dashboard-weight-recorder-card input{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid #e4d8c8;
+    background:#fffaf2;
+    border-radius:12px;
+    padding:12px 13px;
+    font-family:'Prompt',sans-serif;
+    font-size:14px;
+    outline:none;
+  }
+  .dashboard-weight-recorder-card .weight-recorder-btn{
+    border:none;
+    border-radius:12px;
+    padding:13px 15px;
+    background:var(--moss);
+    color:white;
+    font-family:'Prompt',sans-serif;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .dashboard-weight-recorder-card .weight-recorder-note{
+    margin-top:9px;
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.55;
+  }
+  .dashboard-weight-recorder-card .weight-recorder-mini{
+    margin-top:10px;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:12px;
+    padding:10px 12px;
+    font-size:12px;
+    line-height:1.6;
+    color:var(--ink);
+  }
+  @media(max-width:430px){
+    .dashboard-weight-recorder-card .weight-recorder-grid{
+      grid-template-columns:1fr;
+    }
+    .dashboard-weight-recorder-card .weight-recorder-btn{
+      width:100%;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -4100,6 +4165,231 @@ document.addEventListener("click", function(e){
       renderEnergyAnalyticsDashboard();
     }
   }, 120);
+});
+
+
+function getDashboardWeightValue(){
+  const candidates = [
+    state?.currentWeight,
+    state?.profile?.weight,
+    state?.startWeight
+  ];
+
+  for(const v of candidates){
+    const n = Number(v);
+    if(!isNaN(n) && n > 0) return n;
+  }
+
+  return "";
+}
+
+function findDashboardPageForWeightRecorder(){
+  if(typeof findDashboardPageForEnergy === "function"){
+    const page = findDashboardPageForEnergy();
+    if(page) return page;
+  }
+
+  const pages = Array.from(document.querySelectorAll(".page"));
+  const dashboardPage = pages.find(page => {
+    const text = page.textContent || "";
+    return text.includes("Dashboard ความคืบหน้า") ||
+           text.includes("ข้อมูลร่างกายและค่าแนะนำ") ||
+           text.includes("ภาพรวมสุขภาพ");
+  });
+
+  return dashboardPage || document.querySelector(".page.active") || document.body;
+}
+
+function findBodyProfileCardForWeightRecorder(page){
+  if(!page) return null;
+
+  const cards = Array.from(page.querySelectorAll(".card"));
+  return cards.find(card => {
+    const text = card.textContent || "";
+    return text.includes("ข้อมูลร่างกายและค่าแนะนำ");
+  }) || null;
+}
+
+function ensureDashboardWeightRecorder(){
+  const page = findDashboardPageForWeightRecorder();
+  if(!page) return;
+
+  let card = document.getElementById("dashboardWeightRecorderCard");
+
+  if(!card){
+    card = document.createElement("div");
+    card.className = "card dashboard-weight-recorder-card";
+    card.id = "dashboardWeightRecorderCard";
+
+    card.innerHTML = `
+      <div class="energy-title-row">
+        <div>
+          <div class="energy-title">⚖️ บันทึกน้ำหนักปัจจุบัน</div>
+          <div class="energy-subtitle">ใช้คำนวณ BMI / BMR / TDEE และเทียบน้ำหนักจริงจากบันทึก</div>
+        </div>
+      </div>
+
+      <div class="weight-recorder-grid">
+        <div class="weight-recorder-field">
+          <label>น้ำหนักปัจจุบัน (kg)</label>
+          <input id="dashboardCurrentWeightInput" type="number" step="0.1" min="20" max="250" inputmode="decimal" placeholder="เช่น 62.5">
+        </div>
+        <button class="weight-recorder-btn" id="saveDashboardWeightBtn">บันทึกน้ำหนักวันนี้</button>
+      </div>
+
+      <div class="weight-recorder-mini" id="dashboardWeightRecorderSummary">
+        น้ำหนักปัจจุบัน: -
+      </div>
+
+      <div class="weight-recorder-note">
+        ระบบจะอัปเดตน้ำหนักเดียวกับหน้าหลัก และบันทึกน้ำหนักของวันนี้เข้า history เพื่อใช้เทียบกับน้ำหนักครั้งก่อน
+      </div>
+    `;
+
+    const profileCard = findBodyProfileCardForWeightRecorder(page);
+    if(profileCard){
+      profileCard.insertAdjacentElement("afterend", card);
+    }else{
+      page.appendChild(card);
+    }
+  }
+
+  const input = document.getElementById("dashboardCurrentWeightInput");
+  const currentWeight = getDashboardWeightValue();
+
+  if(input && currentWeight && !input.value){
+    input.value = Number(currentWeight).toFixed(1);
+  }
+
+  updateDashboardWeightRecorderSummary();
+}
+
+function updateDashboardWeightRecorderSummary(){
+  const el = document.getElementById("dashboardWeightRecorderSummary");
+  if(!el) return;
+
+  const current = Number(state?.currentWeight || 0);
+  const start = Number(state?.startWeight || 0);
+  const goal = Number(state?.finalGoal || 0);
+
+  const currentText = current > 0 ? `${current.toFixed(1)} kg` : "-";
+  let progressText = "";
+
+  if(start > 0 && current > 0){
+    const diff = current - start;
+    const sign = diff > 0 ? "+" : "";
+    progressText += `<br>เทียบกับน้ำหนักเริ่มต้น: ${sign}${diff.toFixed(1)} kg`;
+  }
+
+  if(goal > 0 && current > 0){
+    const left = current - goal;
+    progressText += `<br>เหลือถึงเป้าหมายสุดท้าย: ${left.toFixed(1)} kg`;
+  }
+
+  el.innerHTML = `น้ำหนักปัจจุบัน: <b>${currentText}</b>${progressText}`;
+}
+
+function writeDashboardWeightLog(dateStr, weight){
+  if(!state.weightLogs || Array.isArray(state.weightLogs)){
+    if(!Array.isArray(state.weightLogs)) state.weightLogs = [];
+
+    const idx = state.weightLogs.findIndex(item => {
+      if(!item || typeof item !== "object") return false;
+      return item.date === dateStr || item.dateStr === dateStr;
+    });
+
+    const payload = { date: dateStr, weight };
+
+    if(idx >= 0){
+      state.weightLogs[idx] = { ...state.weightLogs[idx], ...payload };
+    }else{
+      state.weightLogs.push(payload);
+    }
+
+    return;
+  }
+
+  state.weightLogs[dateStr] = weight;
+}
+
+function syncDashboardWeightToVisibleFields(weight){
+  const ids = [
+    "dashboardCurrentWeightInput",
+    "profileWeight",
+    "currentWeightInput",
+    "weightInput",
+    "editCurrentWeight"
+  ];
+
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if(el && "value" in el) el.value = Number(weight).toFixed(1);
+  });
+
+  const weightNow = document.getElementById("weightNow");
+  if(weightNow){
+    weightNow.innerHTML = Number(weight).toFixed(1) + "<span> กก.</span>";
+  }
+}
+
+function saveDashboardCurrentWeight(){
+  const input = document.getElementById("dashboardCurrentWeightInput");
+  if(!input) return;
+
+  const weight = Number(input.value);
+
+  if(isNaN(weight) || weight <= 0){
+    alert("กรุณาใส่น้ำหนักให้ถูกต้อง");
+    return;
+  }
+
+  if(weight < 20 || weight > 250){
+    const ok = confirm("น้ำหนักดูผิดปกติ ต้องการบันทึกค่านี้จริงไหม?");
+    if(!ok) return;
+  }
+
+  const today = todayStr();
+
+  state.currentWeight = weight;
+
+  if(!state.profile || typeof state.profile !== "object"){
+    state.profile = {};
+  }
+  state.profile.weight = weight;
+
+  writeDashboardWeightLog(today, weight);
+  syncDashboardWeightToVisibleFields(weight);
+
+  saveState();
+
+  if(typeof renderHome === "function") renderHome();
+  if(typeof renderKcalPage === "function") renderKcalPage();
+  if(typeof renderDashboard === "function") renderDashboard();
+  if(typeof renderEnergyAnalyticsDashboard === "function") renderEnergyAnalyticsDashboard();
+
+  ensureDashboardWeightRecorder();
+  alert("บันทึกน้ำหนักวันนี้แล้ว");
+}
+
+document.addEventListener("click", function(e){
+  if(e.target && e.target.id === "saveDashboardWeightBtn"){
+    saveDashboardCurrentWeight();
+  }
+});
+
+window.dashboardWeightRecorderV1 = true;
+
+setTimeout(() => {
+  ensureDashboardWeightRecorder();
+}, 400);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(() => {
+    ensureDashboardWeightRecorder();
+  }, 150);
 });
 
 </script>
