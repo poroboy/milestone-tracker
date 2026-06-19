@@ -1712,6 +1712,45 @@
     }
   }
 
+
+  /* energyWidthFixV2 */
+  #energyDashboardWrap{
+    max-width:520px !important;
+    width:100% !important;
+    margin:16px auto 96px !important;
+    padding:0 16px !important;
+    box-sizing:border-box !important;
+  }
+
+  #energyAnalyticsCard,
+  #energyChartCard{
+    width:100% !important;
+    max-width:100% !important;
+    box-sizing:border-box !important;
+  }
+
+  #energyAnalyticsCard .energy-metric-grid{
+    grid-template-columns:1fr !important;
+  }
+
+  #energyChartCard .energy-bar-line{
+    grid-template-columns:36px 1fr 52px !important;
+  }
+
+  @media(min-width:900px){
+    #energyDashboardWrap{
+      max-width:520px !important;
+    }
+  }
+
+  @media(max-width:560px){
+    #energyDashboardWrap{
+      max-width:none !important;
+      margin:14px 0 92px !important;
+      padding:0 12px !important;
+    }
+  }
+
 </style>
 </head>
 <body>
