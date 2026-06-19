@@ -1648,6 +1648,70 @@
     }
   }
 
+
+  /* energyBoxPolishV1 */
+  #energyDashboardWrap{
+    box-sizing:border-box;
+    padding:0 16px 96px;
+    margin-top:14px;
+  }
+
+  #energyAnalyticsCard,
+  #energyChartCard{
+    background:#fffdf8 !important;
+    border:1px solid #e5d9c8 !important;
+    border-radius:18px !important;
+    padding:16px !important;
+    margin:14px 0 !important;
+    box-sizing:border-box;
+    overflow:hidden;
+  }
+
+  #energyAnalyticsCard .energy-title-row,
+  #energyChartCard .energy-title-row{
+    margin-bottom:12px;
+  }
+
+  #energyAnalyticsCard .energy-metric-grid{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:10px;
+  }
+
+  #energyAnalyticsCard .energy-note{
+    margin-top:12px;
+  }
+
+  #energyChartCard .energy-chart-list{
+    max-height:420px;
+    overflow-y:auto;
+    padding-right:4px;
+  }
+
+  #energyChartCard .energy-chart-row{
+    padding:10px 0;
+  }
+
+  @media(max-width:700px){
+    #energyDashboardWrap{
+      padding:0 12px 92px;
+    }
+
+    #energyAnalyticsCard,
+    #energyChartCard{
+      padding:14px !important;
+      border-radius:16px !important;
+    }
+
+    #energyAnalyticsCard .energy-metric-grid{
+      grid-template-columns:1fr;
+    }
+
+    #energyChartCard .energy-chart-list{
+      max-height:340px;
+    }
+  }
+
 </style>
 </head>
 <body>
