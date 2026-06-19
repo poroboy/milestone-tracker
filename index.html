@@ -1590,6 +1590,64 @@
     }
   }
 
+
+  .inline-weight-card-v2{
+    margin:12px 0 10px;
+    padding:12px;
+    border:1px solid #efe8da;
+    border-radius:14px;
+    background:#fbf8f2;
+  }
+  .inline-weight-card-v2 .inline-weight-grid{
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:10px;
+    align-items:end;
+  }
+  .inline-weight-card-v2 label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:5px;
+  }
+  .inline-weight-card-v2 input{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid #e4d8c8;
+    background:#fffaf2;
+    border-radius:12px;
+    padding:12px 13px;
+    font-family:'Prompt',sans-serif;
+    font-size:14px;
+    outline:none;
+  }
+  .inline-weight-card-v2 button{
+    border:none;
+    border-radius:12px;
+    padding:13px 15px;
+    background:var(--moss);
+    color:white;
+    font-family:'Prompt',sans-serif;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .inline-weight-card-v2 .inline-weight-summary{
+    margin-top:9px;
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+  @media(max-width:430px){
+    .inline-weight-card-v2 .inline-weight-grid{
+      grid-template-columns:1fr;
+    }
+    .inline-weight-card-v2 button{
+      width:100%;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -4400,6 +4458,211 @@ document.addEventListener("click", function(e){
   setTimeout(() => {
     ensureDashboardWeightRecorder();
   }, 150);
+});
+
+
+window.dashboardInlineWeightForceV2 = true;
+
+function getInlineDashboardWeight(){
+  const candidates = [
+    state?.currentWeight,
+    state?.profile?.weight,
+    state?.startWeight
+  ];
+
+  for(const v of candidates){
+    const n = Number(v);
+    if(!isNaN(n) && n > 0) return n;
+  }
+
+  return "";
+}
+
+function findBodyProfileCardForce(){
+  const cards = Array.from(document.querySelectorAll(".card, .dashboard-card, .kcal-input-card"));
+
+  const matched = cards
+    .filter(card => {
+      const text = card.textContent || "";
+      return text.includes("ข้อมูลร่างกายและค่าแนะนำ") &&
+             text.includes("เพศ") &&
+             text.includes("ส่วนสูง");
+    })
+    .sort((a,b) => (a.textContent || "").length - (b.textContent || "").length);
+
+  return matched[0] || null;
+}
+
+function writeWeightLogForce(dateStr, weight){
+  if(!state.weightLogs){
+    state.weightLogs = {};
+  }
+
+  if(Array.isArray(state.weightLogs)){
+    const idx = state.weightLogs.findIndex(item => {
+      if(!item || typeof item !== "object") return false;
+      return item.date === dateStr || item.dateStr === dateStr;
+    });
+
+    const payload = { date: dateStr, weight };
+
+    if(idx >= 0){
+      state.weightLogs[idx] = { ...state.weightLogs[idx], ...payload };
+    }else{
+      state.weightLogs.push(payload);
+    }
+
+    return;
+  }
+
+  state.weightLogs[dateStr] = weight;
+}
+
+function updateInlineWeightSummary(){
+  const el = document.getElementById("inlineWeightSummaryV2");
+  if(!el) return;
+
+  const current = Number(state?.currentWeight || state?.profile?.weight || 0);
+  const start = Number(state?.startWeight || 0);
+  const goal = Number(state?.finalGoal || 0);
+
+  let html = `น้ำหนักที่ใช้คำนวณตอนนี้: <b>${current > 0 ? current.toFixed(1) + " kg" : "-"}</b>`;
+
+  if(start > 0 && current > 0){
+    const diff = current - start;
+    html += `<br>เทียบกับน้ำหนักเริ่มต้น: ${diff > 0 ? "+" : ""}${diff.toFixed(1)} kg`;
+  }
+
+  if(goal > 0 && current > 0){
+    html += `<br>เหลือถึงเป้าหมายสุดท้าย: ${(current - goal).toFixed(1)} kg`;
+  }
+
+  el.innerHTML = html;
+}
+
+function mountInlineWeightToBodyProfile(){
+  const profileCard = findBodyProfileCardForce();
+  if(!profileCard) return false;
+
+  let box = document.getElementById("inlineWeightCardV2");
+
+  if(!box){
+    box = document.createElement("div");
+    box.id = "inlineWeightCardV2";
+    box.className = "inline-weight-card-v2";
+    box.innerHTML = `
+      <div class="inline-weight-grid">
+        <div>
+          <label>น้ำหนักปัจจุบัน (kg)</label>
+          <input id="inlineCurrentWeightInputV2" type="number" step="0.1" min="20" max="250" inputmode="decimal" placeholder="เช่น 62.5">
+        </div>
+        <button id="saveInlineCurrentWeightBtnV2">บันทึกน้ำหนักวันนี้</button>
+      </div>
+      <div class="inline-weight-summary" id="inlineWeightSummaryV2">
+        น้ำหนักที่ใช้คำนวณตอนนี้: -
+      </div>
+    `;
+
+    const buttons = Array.from(profileCard.querySelectorAll("button"));
+    const saveProfileBtn = buttons.find(btn => (btn.textContent || "").includes("บันทึกข้อมูล"));
+    const insertBeforeTarget = saveProfileBtn ? (saveProfileBtn.parentElement || saveProfileBtn) : null;
+
+    if(insertBeforeTarget && profileCard.contains(insertBeforeTarget)){
+      insertBeforeTarget.insertAdjacentElement("beforebegin", box);
+    }else{
+      profileCard.appendChild(box);
+    }
+  }
+
+  const input = document.getElementById("inlineCurrentWeightInputV2");
+  const weight = getInlineDashboardWeight();
+
+  if(input && weight && !input.value){
+    input.value = Number(weight).toFixed(1);
+  }
+
+  updateInlineWeightSummary();
+  return true;
+}
+
+function saveInlineCurrentWeightV2(){
+  const input = document.getElementById("inlineCurrentWeightInputV2");
+  if(!input) return;
+
+  const weight = Number(input.value);
+
+  if(isNaN(weight) || weight <= 0){
+    alert("กรุณาใส่น้ำหนักให้ถูกต้อง");
+    return;
+  }
+
+  if(weight < 20 || weight > 250){
+    const ok = confirm("น้ำหนักดูผิดปกติ ต้องการบันทึกค่านี้จริงไหม?");
+    if(!ok) return;
+  }
+
+  if(!state.profile || typeof state.profile !== "object"){
+    state.profile = {};
+  }
+
+  state.currentWeight = weight;
+  state.profile.weight = weight;
+
+  writeWeightLogForce(todayStr(), weight);
+
+  const visibleIds = [
+    "inlineCurrentWeightInputV2",
+    "dashboardCurrentWeightInput",
+    "currentWeightInput",
+    "weightInput",
+    "profileWeight"
+  ];
+
+  visibleIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(el && "value" in el) el.value = weight.toFixed(1);
+  });
+
+  saveState();
+
+  if(typeof renderHome === "function") renderHome();
+  if(typeof renderKcalPage === "function") renderKcalPage();
+  if(typeof renderDashboard === "function") renderDashboard();
+  if(typeof renderEnergyAnalyticsDashboard === "function") renderEnergyAnalyticsDashboard();
+
+  setTimeout(() => {
+    mountInlineWeightToBodyProfile();
+    updateInlineWeightSummary();
+  }, 100);
+
+  alert("บันทึกน้ำหนักวันนี้แล้ว");
+}
+
+document.addEventListener("click", function(e){
+  if(e.target && e.target.id === "saveInlineCurrentWeightBtnV2"){
+    saveInlineCurrentWeightV2();
+  }
+});
+
+function startInlineWeightMountLoop(){
+  let count = 0;
+  const timer = setInterval(() => {
+    count += 1;
+    const ok = mountInlineWeightToBodyProfile();
+
+    if(ok || count > 30){
+      clearInterval(timer);
+    }
+  }, 300);
+}
+
+setTimeout(startInlineWeightMountLoop, 300);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(startInlineWeightMountLoop, 250);
 });
 
 </script>
