@@ -2125,6 +2125,47 @@
     }
   }
 
+
+  /* insulinCardCenterFixV2 */
+  #kcalInsulinInsightCard{
+    width:calc(100% - 32px) !important;
+    max-width:520px !important;
+    margin:12px auto !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardInsulinInsightCard{
+    width:100% !important;
+    max-width:520px !important;
+    margin:0 auto 12px !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 #dashboardInsulinInsightCard,
+  #dashboardFinalAnalysisStackV9 #energyDashboardWrap,
+  #dashboardFinalAnalysisStackV9 #energyAnalyticsCard,
+  #dashboardFinalAnalysisStackV9 #energyChartCard{
+    width:100% !important;
+    max-width:none !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 #dashboardInsulinInsightCard{
+    margin:0 0 12px 0 !important;
+  }
+
+  @media(max-width:560px){
+    #kcalInsulinInsightCard{
+      width:calc(100% - 24px) !important;
+      max-width:none !important;
+      margin:12px auto !important;
+    }
+
+    #dashboardInsulinInsightCard{
+      max-width:none !important;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -5789,6 +5830,76 @@ document.addEventListener("click", function(e){
   if(!tab) return;
 
   setTimeout(refreshInsulinInsightUI, 300);
+});
+
+
+function insulinCardCenterFixV2(){
+  // kcal page: put Carb / Sugar card before data tools and center it
+  const kcalCard = document.getElementById("kcalInsulinInsightCard");
+  const pageKcal = document.getElementById("pageKcal");
+
+  if(kcalCard && pageKcal){
+    const dataTools = pageKcal.querySelector(".data-tools-card");
+    if(dataTools && dataTools.previousElementSibling !== kcalCard){
+      dataTools.insertAdjacentElement("beforebegin", kcalCard);
+    }
+
+    kcalCard.style.width = "calc(100% - 32px)";
+    kcalCard.style.maxWidth = "520px";
+    kcalCard.style.margin = "12px auto";
+    kcalCard.style.boxSizing = "border-box";
+  }
+
+  // dashboard page: put Glucose / Insulin Insight into same analysis stack
+  if(typeof dashboardFinalStackV9 === "function"){
+    dashboardFinalStackV9();
+  }
+
+  const dashCard = document.getElementById("dashboardInsulinInsightCard");
+  const stack =
+    document.getElementById("dashboardFinalAnalysisStackV9") ||
+    document.getElementById("dashboardAnalysisColumnFinal") ||
+    document.getElementById("dashboardAnalysisColumnV6");
+
+  if(dashCard && stack){
+    const energyWrap = document.getElementById("energyDashboardWrap");
+
+    if(energyWrap && energyWrap.parentElement === stack){
+      if(energyWrap.previousElementSibling !== dashCard){
+        energyWrap.insertAdjacentElement("beforebegin", dashCard);
+      }
+    }else if(dashCard.parentElement !== stack){
+      stack.appendChild(dashCard);
+    }
+
+    dashCard.style.width = "100%";
+    dashCard.style.maxWidth = "none";
+    dashCard.style.margin = "0 0 12px 0";
+    dashCard.style.boxSizing = "border-box";
+  }
+}
+
+function startInsulinCardCenterFixV2(){
+  let count = 0;
+
+  const timer = setInterval(() => {
+    count += 1;
+    insulinCardCenterFixV2();
+
+    if(count >= 16){
+      clearInterval(timer);
+    }
+  }, 250);
+}
+
+setTimeout(startInsulinCardCenterFixV2, 300);
+setTimeout(startInsulinCardCenterFixV2, 1500);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(startInsulinCardCenterFixV2, 300);
 });
 
 </script>
