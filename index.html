@@ -2241,6 +2241,18 @@
     }
   }
 
+
+  /* overviewMetabolicAnalysisV1 */
+  .overview-metabolic-extra{
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px solid #eadfce;
+  }
+  .overview-metabolic-extra .overview-metabolic-title{
+    font-weight:900;
+    margin-bottom:4px;
+  }
+
 </style>
 </head>
 <body>
@@ -6150,6 +6162,157 @@ setTimeout(() => {
 
   observer.observe(foodList, { childList: true, subtree: true });
 }, 800);
+
+
+function overviewMetabolicNumV1(v){
+  return Math.round(Number(v) || 0).toLocaleString("th-TH");
+}
+
+function overviewMetabolicQualityV1({ carb = 0, sugar = 0, fiber = 0, highCount = 0, foodDays = 0 } = {}){
+  const netCarb = Math.max(0, carb - fiber);
+  let label = "ดี";
+  let advice = "คุมแป้งและน้ำตาลได้ดี รักษาโปรตีนและเพิ่มผัก/ไฟเบอร์ต่อ";
+
+  if(foodDays === 0){
+    label = "ยังไม่มีข้อมูล";
+    advice = "ยังไม่มีข้อมูลแป้ง น้ำตาล และไฟเบอร์เพียงพอสำหรับวิเคราะห์";
+  }else if(highCount > 0 || sugar >= 80 || netCarb >= 180){
+    label = "ควรระวัง";
+    advice = "มีแนวโน้มแป้งหรือน้ำตาลสะสมสูง ควรลดน้ำหวาน/ของหวาน และเพิ่มโปรตีนกับผักในมื้อถัดไป";
+  }else if(fiber < 8 && carb >= 40){
+    label = "พอใช้";
+    advice = "น้ำตาลยังไม่สูงมาก แต่ไฟเบอร์ยังน้อย แนะนำเพิ่มผักหรือแหล่งไฟเบอร์เพื่อช่วยให้มื้ออาหารนิ่งขึ้น";
+  }else if(netCarb >= 100){
+    label = "พอใช้";
+    advice = "แป้งสุทธิค่อนข้างสูง ควรกินคู่โปรตีนและผักเพื่อลดโอกาสน้ำตาลแกว่ง";
+  }
+
+  return { netCarb, label, advice };
+}
+
+function getOverviewMetabolicMonthV1(){
+  const ym = typeof getEnergySelectedYm === "function" ? getEnergySelectedYm() : todayStr().slice(0, 7);
+
+  let rows = [];
+
+  if(typeof getMetabolicRows === "function"){
+    rows = getMetabolicRows().filter(r => r.dateStr && r.dateStr.startsWith(ym));
+  }else{
+    const days = state.kcalDays || {};
+    rows = Object.keys(days).filter(dateStr => dateStr.startsWith(ym)).map(dateStr => {
+      const log = typeof getDayLog === "function" ? getDayLog(dateStr) : days[dateStr];
+      const food = Array.isArray(log?.food) ? log.food : [];
+
+      const totalCarb = food.reduce((sum, item) => sum + (Number(item.carb ?? item.carbs ?? item.carbohydrate) || 0), 0);
+      const totalSugar = food.reduce((sum, item) => sum + (Number(item.sugar) || 0), 0);
+      const totalFiber = food.reduce((sum, item) => sum + (Number(item.fiber) || 0), 0);
+      const highCount = food.filter(item => (item.spikeRisk || item.glucoseSpikeRisk) === "high").length;
+
+      return { dateStr, food, totalCarb, totalSugar, totalFiber, highCount };
+    });
+  }
+
+  const totalCarb = rows.reduce((sum, r) => sum + (Number(r.totalCarb) || 0), 0);
+  const totalSugar = rows.reduce((sum, r) => sum + (Number(r.totalSugar) || 0), 0);
+  const totalFiber = rows.reduce((sum, r) => sum + (Number(r.totalFiber) || 0), 0);
+  const highCount = rows.reduce((sum, r) => sum + (Number(r.highCount) || 0), 0);
+  const foodDays = rows.filter(r => Array.isArray(r.food) && r.food.length > 0).length || rows.length;
+
+  const q = overviewMetabolicQualityV1({
+    carb: totalCarb,
+    sugar: totalSugar,
+    fiber: totalFiber,
+    highCount,
+    foodDays
+  });
+
+  return {
+    ym,
+    totalCarb,
+    totalSugar,
+    totalFiber,
+    highCount,
+    foodDays,
+    netCarb: q.netCarb,
+    quality: q.label,
+    advice: q.advice
+  };
+}
+
+function findDashboardOverviewCardV1(){
+  const cards = Array.from(document.querySelectorAll(".card, .dashboard-card, .kcal-input-card"));
+
+  return cards.find(card => {
+    if(card.closest("#energyDashboardWrap")) return false;
+    if(card.closest("#dashboardInsulinInsightCard")) return false;
+
+    const text = card.textContent || "";
+    return text.includes("วิเคราะห์ภาพรวม");
+  }) || null;
+}
+
+function findDashboardOverviewInnerBoxV1(card){
+  if(!card) return null;
+
+  const boxes = Array.from(card.querySelectorAll("div"));
+
+  return boxes.find(el => {
+    const text = el.textContent || "";
+    return text.includes("จากข้อมูลร่างกาย") ||
+           text.includes("TDEE แนะนำ") ||
+           text.includes("โปรตีนเฉลี่ย");
+  }) || card;
+}
+
+function enhanceDashboardOverviewMetabolicV1(){
+  const card = findDashboardOverviewCardV1();
+  if(!card) return;
+
+  const box = findDashboardOverviewInnerBoxV1(card);
+  if(!box) return;
+
+  if(!box.dataset.baseOverviewHtmlV1){
+    box.dataset.baseOverviewHtmlV1 = box.innerHTML;
+  }
+
+  const m = getOverviewMetabolicMonthV1();
+
+  const metabolicHtml = `
+    <div class="overview-metabolic-extra" id="overviewMetabolicExtraV1">
+      <div class="overview-metabolic-title">• วิเคราะห์แป้ง / น้ำตาล / อินซูลินโดยประมาณ</div>
+      <div>• เดือนนี้แป้งรวมประมาณ ${overviewMetabolicNumV1(m.totalCarb)}g, net carb ${overviewMetabolicNumV1(m.netCarb)}g, น้ำตาล ${overviewMetabolicNumV1(m.totalSugar)}g, ไฟเบอร์ ${overviewMetabolicNumV1(m.totalFiber)}g</div>
+      <div>• คุณภาพแป้งโดยรวม: ${m.quality} — ${m.advice}</div>
+      <div>• มื้อเสี่ยงน้ำตาลพุ่งสูง: ${m.highCount} มื้อ จากข้อมูลอาหาร ${m.foodDays} วัน</div>
+    </div>
+  `;
+
+  box.innerHTML = box.dataset.baseOverviewHtmlV1 + metabolicHtml;
+}
+
+if(typeof renderDashboard === "function" && !renderDashboard.__overviewMetabolicWrapped){
+  const originalRenderDashboardOverviewMetabolicV1 = renderDashboard;
+
+  renderDashboard = function(...args){
+    const result = originalRenderDashboardOverviewMetabolicV1.apply(this, args);
+
+    setTimeout(enhanceDashboardOverviewMetabolicV1, 50);
+    setTimeout(enhanceDashboardOverviewMetabolicV1, 300);
+
+    return result;
+  };
+
+  renderDashboard.__overviewMetabolicWrapped = true;
+}
+
+setTimeout(enhanceDashboardOverviewMetabolicV1, 500);
+setTimeout(enhanceDashboardOverviewMetabolicV1, 1500);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(enhanceDashboardOverviewMetabolicV1, 400);
+});
 
 </script>
 
