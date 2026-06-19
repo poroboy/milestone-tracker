@@ -1986,6 +1986,61 @@
     }
   }
 
+
+  /* dashboardFinalStackV9 */
+  #dashboardFinalAnalysisStackV9{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:12px !important;
+    width:100% !important;
+    max-width:520px !important;
+    box-sizing:border-box !important;
+    align-self:start !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 > .card,
+  #dashboardFinalAnalysisStackV9 > div{
+    width:100% !important;
+    max-width:none !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 > .card{
+    margin:0 !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 #energyDashboardWrap{
+    width:100% !important;
+    max-width:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 #energyAnalyticsCard,
+  #dashboardFinalAnalysisStackV9 #energyChartCard{
+    width:100% !important;
+    max-width:none !important;
+    margin:0 0 12px 0 !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 #energyChartCard{
+    margin-bottom:0 !important;
+  }
+
+  #dashboardFinalAnalysisStackV9 .energy-metric-grid{
+    width:100% !important;
+  }
+
+  @media(max-width:700px){
+    #dashboardFinalAnalysisStackV9{
+      max-width:none !important;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -5196,6 +5251,118 @@ document.addEventListener("click", function(e){
 
   setTimeout(startEnergyFinalAlignV7, 300);
 });
+
+
+function findInsightCardFinalV9(){
+  const possibleCards = Array.from(document.querySelectorAll(".card, .dashboard-card, .kcal-input-card"));
+
+  const matched = possibleCards.filter(card => {
+    if(card.closest("#energyDashboardWrap")) return false;
+    if(card.closest("#dashboardFinalAnalysisStackV9")) return false;
+
+    const text = card.textContent || "";
+    return text.includes("วิเคราะห์ภาพรวม");
+  });
+
+  if(matched.length){
+    return matched.sort((a,b) => (a.textContent || "").length - (b.textContent || "").length)[0];
+  }
+
+  const all = Array.from(document.querySelectorAll("*"));
+  const title = all.find(el => {
+    const text = (el.textContent || "").trim();
+    return text === "วิเคราะห์ภาพรวม";
+  });
+
+  if(title){
+    return title.closest(".card, .dashboard-card, .kcal-input-card") || title.parentElement;
+  }
+
+  return null;
+}
+
+function dashboardFinalStackV9(){
+  const energyWrap = document.getElementById("energyDashboardWrap");
+  const insightCard = findInsightCardFinalV9();
+
+  if(!energyWrap || !insightCard) return false;
+
+  let stack = document.getElementById("dashboardFinalAnalysisStackV9");
+
+  if(!stack){
+    stack = document.createElement("div");
+    stack.id = "dashboardFinalAnalysisStackV9";
+
+    insightCard.insertAdjacentElement("beforebegin", stack);
+  }
+
+  // remove old layout helper classes that created weird column behavior
+  document.querySelectorAll(".energy-force-column").forEach(el => {
+    el.classList.remove("energy-force-column");
+  });
+
+  // move both cards into one final stack
+  if(insightCard.parentElement !== stack){
+    stack.appendChild(insightCard);
+  }
+
+  if(energyWrap.parentElement !== stack){
+    stack.appendChild(energyWrap);
+  }
+
+  // hard reset inline layout from old patches
+  stack.style.display = "flex";
+  stack.style.flexDirection = "column";
+  stack.style.gap = "12px";
+  stack.style.width = "100%";
+  stack.style.maxWidth = "520px";
+  stack.style.margin = "0";
+  stack.style.padding = "0";
+
+  insightCard.style.width = "100%";
+  insightCard.style.maxWidth = "none";
+  insightCard.style.margin = "0";
+
+  energyWrap.style.width = "100%";
+  energyWrap.style.maxWidth = "none";
+  energyWrap.style.margin = "0";
+  energyWrap.style.padding = "0";
+
+  return true;
+}
+
+function startDashboardFinalStackV9(){
+  let count = 0;
+
+  const timer = setInterval(() => {
+    count += 1;
+    const ok = dashboardFinalStackV9();
+
+    if(ok && count >= 8){
+      clearInterval(timer);
+    }
+
+    if(count >= 40){
+      clearInterval(timer);
+    }
+  }, 250);
+}
+
+setTimeout(startDashboardFinalStackV9, 300);
+setTimeout(startDashboardFinalStackV9, 1500);
+setTimeout(startDashboardFinalStackV9, 3000);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(startDashboardFinalStackV9, 300);
+});
+
+// keep layout stable even if old scripts move energy card again
+setInterval(() => {
+  dashboardFinalStackV9();
+}, 2500);
 
 </script>
 
