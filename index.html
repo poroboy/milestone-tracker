@@ -1884,6 +1884,56 @@
     margin-top:10px !important;
   }
 
+
+  /* energyColumnStackFixV6 */
+  #dashboardAnalysisColumnV6{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:12px !important;
+    width:100% !important;
+    max-width:520px !important;
+    align-self:start !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardAnalysisColumnV6 > .card{
+    margin:0 !important;
+    width:100% !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardAnalysisColumnV6 #energyDashboardWrap{
+    width:100% !important;
+    max-width:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardAnalysisColumnV6 #energyAnalyticsCard,
+  #dashboardAnalysisColumnV6 #energyChartCard{
+    width:100% !important;
+    max-width:none !important;
+    margin:0 0 12px 0 !important;
+    box-sizing:border-box !important;
+  }
+
+  #dashboardAnalysisColumnV6 #energyChartCard{
+    margin-bottom:0 !important;
+  }
+
+  .energy-force-column{
+    display:unset !important;
+    flex-direction:unset !important;
+    gap:unset !important;
+  }
+
+  @media(max-width:700px){
+    #dashboardAnalysisColumnV6{
+      max-width:none !important;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -4968,6 +5018,63 @@ document.addEventListener("click", function(e){
   const tab = e.target.closest ? e.target.closest(".tab") : null;
   if(!tab) return;
   setTimeout(fixEnergyGapV4, 300);
+});
+
+
+function energyColumnStackFixV6(){
+  const energyWrap = document.getElementById("energyDashboardWrap");
+  if(!energyWrap) return;
+
+  document.querySelectorAll(".energy-force-column").forEach(el => {
+    el.classList.remove("energy-force-column");
+  });
+
+  const cards = Array.from(document.querySelectorAll(".card"));
+  const insightCard = cards.find(card => {
+    const text = card.textContent || "";
+    return text.includes("วิเคราะห์ภาพรวม");
+  });
+
+  if(!insightCard) return;
+
+  let column = document.getElementById("dashboardAnalysisColumnV6");
+
+  if(!column){
+    column = document.createElement("div");
+    column.id = "dashboardAnalysisColumnV6";
+    column.className = "dashboard-analysis-column-v6";
+
+    insightCard.insertAdjacentElement("beforebegin", column);
+  }
+
+  if(insightCard.parentElement !== column){
+    column.appendChild(insightCard);
+  }
+
+  if(energyWrap.parentElement !== column){
+    column.appendChild(energyWrap);
+  }
+}
+
+function startEnergyColumnStackFixV6(){
+  let count = 0;
+  const timer = setInterval(() => {
+    count += 1;
+    energyColumnStackFixV6();
+
+    if(count >= 12){
+      clearInterval(timer);
+    }
+  }, 250);
+}
+
+setTimeout(startEnergyColumnStackFixV6, 300);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(startEnergyColumnStackFixV6, 300);
 });
 
 </script>
