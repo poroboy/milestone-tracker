@@ -1360,6 +1360,169 @@
     }
   }
 
+
+  .energy-analytics-card,
+  .energy-chart-card{
+    margin-top:14px;
+  }
+  .energy-title-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+  }
+  .energy-title{
+    font-size:15px;
+    font-weight:900;
+    color:var(--ink);
+  }
+  .energy-subtitle{
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.45;
+  }
+  .energy-metric-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:9px;
+    margin-top:10px;
+  }
+  .energy-metric{
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:14px;
+    padding:12px;
+  }
+  .energy-metric .label{
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  .energy-metric .value{
+    font-size:20px;
+    font-weight:900;
+    color:var(--ink);
+    font-family:'DM Mono',monospace;
+  }
+  .energy-metric .value.good{
+    color:var(--moss);
+  }
+  .energy-metric .value.warn{
+    color:#b94c2f;
+  }
+  .energy-note{
+    margin-top:10px;
+    font-size:11px;
+    line-height:1.55;
+    color:var(--muted);
+    background:#fffaf2;
+    border:1px solid #f0e5d4;
+    border-radius:12px;
+    padding:10px 12px;
+  }
+  .energy-chart-tabs{
+    display:flex;
+    gap:6px;
+    margin:10px 0 12px;
+  }
+  .energy-chart-tab{
+    border:1px solid #e7dccb;
+    background:#fffaf2;
+    color:var(--muted);
+    border-radius:999px;
+    padding:7px 11px;
+    font-family:'Prompt',sans-serif;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+  }
+  .energy-chart-tab.active{
+    background:var(--ink);
+    color:var(--paper);
+    border-color:var(--ink);
+  }
+  .energy-chart-list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    max-height:360px;
+    overflow-y:auto;
+    padding-right:4px;
+  }
+  .energy-chart-list::-webkit-scrollbar{
+    width:5px;
+  }
+  .energy-chart-list::-webkit-scrollbar-thumb{
+    background:#d8cfc0;
+    border-radius:999px;
+  }
+  .energy-chart-row{
+    border-bottom:1px solid #eee4d6;
+    padding-bottom:9px;
+  }
+  .energy-chart-row:last-child{
+    border-bottom:none;
+  }
+  .energy-chart-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+    margin-bottom:6px;
+    font-size:12px;
+  }
+  .energy-chart-label{
+    font-weight:900;
+    color:var(--ink);
+  }
+  .energy-chart-balance{
+    font-family:'DM Mono',monospace;
+    font-weight:900;
+    color:var(--moss);
+  }
+  .energy-chart-balance.surplus{
+    color:#b94c2f;
+  }
+  .energy-bar-line{
+    display:grid;
+    grid-template-columns:42px 1fr 58px;
+    align-items:center;
+    gap:7px;
+    margin:4px 0;
+    font-size:10px;
+    color:var(--muted);
+  }
+  .energy-bar-track{
+    height:7px;
+    background:#efe8da;
+    border-radius:999px;
+    overflow:hidden;
+  }
+  .energy-bar-fill{
+    height:100%;
+    border-radius:999px;
+  }
+  .energy-bar-fill.food{
+    background:#c9694e;
+  }
+  .energy-bar-fill.burn{
+    background:var(--moss);
+  }
+  .energy-bar-value{
+    font-family:'DM Mono',monospace;
+    text-align:right;
+    color:var(--ink);
+  }
+  @media(max-width:430px){
+    .energy-metric-grid{
+      grid-template-columns:1fr;
+    }
+    .energy-chart-list{
+      max-height:300px;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -3295,6 +3458,361 @@ function yearMetrics(year){
     weightChange
   };
 }
+
+
+let energyChartMode = "daily";
+const KCAL_PER_KG_FAT_ESTIMATE = 7700;
+
+function fmtEnergyNumber(n){
+  return Math.round(Number(n) || 0).toLocaleString("th-TH");
+}
+
+function fmtEnergyKg(n){
+  return (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("th-TH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function getEnergyDayRows(){
+  const days = state.kcalDays || {};
+  return Object.keys(days)
+    .sort()
+    .map(dateStr => {
+      const t = dayTotals(dateStr);
+      const food = Number(t.food) || 0;
+      const exercise = Number(t.exercise) || 0;
+      const base = Number(t.base) || 0;
+      const burn = base + exercise;
+      const balance = burn - food; // positive = deficit, negative = surplus
+      return {
+        dateStr,
+        food,
+        exercise,
+        base,
+        burn,
+        balance,
+        hasData: !!t.hasData
+      };
+    })
+    .filter(r => r.hasData);
+}
+
+function getEnergySelectedYm(){
+  const candidates = [
+    "dashboardMonthSelect",
+    "dashMonthSelect",
+    "monthSelect"
+  ];
+
+  for(const id of candidates){
+    const el = document.getElementById(id);
+    if(el && el.value && /^\d{4}-\d{2}$/.test(el.value)) return el.value;
+  }
+
+  return todayStr().slice(0, 7);
+}
+
+function getEnergySelectedYear(){
+  return getEnergySelectedYm().slice(0, 4);
+}
+
+function getThaiShortMonth(mIndex){
+  const fallback = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  if(typeof thaiMonths !== "undefined" && thaiMonths[mIndex]){
+    return thaiMonths[mIndex].slice(0, 3);
+  }
+  return fallback[mIndex] || "";
+}
+
+function formatEnergyDayLabel(dateStr){
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const today = todayStr();
+  const suffix = dateStr === today ? " · วันนี้" : "";
+  return `${d} ${getThaiShortMonth(m-1)}${suffix}`;
+}
+
+function groupEnergyRows(rows, mode){
+  const map = new Map();
+
+  rows.forEach(r => {
+    let key = r.dateStr;
+    let label = formatEnergyDayLabel(r.dateStr);
+
+    if(mode === "monthly"){
+      key = r.dateStr.slice(0, 7);
+      const [y,m] = key.split("-").map(Number);
+      label = `${getThaiShortMonth(m-1)} ${String((y + 543)).slice(-2)}`;
+    }
+
+    if(mode === "yearly"){
+      key = r.dateStr.slice(0, 4);
+      label = `${Number(key) + 543}`;
+    }
+
+    if(!map.has(key)){
+      map.set(key, {
+        key,
+        label,
+        food: 0,
+        burn: 0,
+        balance: 0
+      });
+    }
+
+    const item = map.get(key);
+    item.food += r.food;
+    item.burn += r.burn;
+    item.balance += r.balance;
+  });
+
+  return Array.from(map.values()).sort((a,b) => a.key.localeCompare(b.key));
+}
+
+function getEnergyChartRows(){
+  const rows = getEnergyDayRows();
+
+  if(energyChartMode === "daily"){
+    const ym = getEnergySelectedYm();
+    return groupEnergyRows(rows.filter(r => r.dateStr.startsWith(ym)), "daily");
+  }
+
+  if(energyChartMode === "monthly"){
+    const year = getEnergySelectedYear();
+    return groupEnergyRows(rows.filter(r => r.dateStr.startsWith(year)), "monthly");
+  }
+
+  return groupEnergyRows(rows, "yearly");
+}
+
+function getWeightChangeForEnergy(){
+  const logs = state.weightLogs || {};
+  let rows = [];
+
+  if(Array.isArray(logs)){
+    rows = logs.map((item, idx) => ({
+      date: item.date || item.dateStr || String(idx),
+      weight: Number(item.weight ?? item.value ?? item)
+    }));
+  } else {
+    rows = Object.entries(logs).map(([date, item]) => ({
+      date,
+      weight: Number(typeof item === "object" ? (item.weight ?? item.value) : item)
+    }));
+  }
+
+  rows = rows.filter(r => !isNaN(r.weight)).sort((a,b) => String(a.date).localeCompare(String(b.date)));
+
+  if(rows.length < 2) return null;
+
+  const first = rows[0];
+  const latest = rows[rows.length - 1];
+
+  return {
+    first: first.weight,
+    latest: latest.weight,
+    change: latest.weight - first.weight
+  };
+}
+
+function ensureEnergyAnalyticsCard(){
+  const anyDashEl =
+    document.querySelector(".dash-daily-list") ||
+    document.querySelector("[id^='dash']") ||
+    document.getElementById("dashboardMonthSelect");
+
+  const page =
+    document.getElementById("pageDashboard") ||
+    document.getElementById("dashboardPage") ||
+    (anyDashEl ? anyDashEl.closest(".page") : null);
+
+  if(!page) return null;
+
+  if(document.getElementById("energyAnalyticsCard")){
+    return document.getElementById("energyAnalyticsCard");
+  }
+
+  const wrap = document.createElement("div");
+  wrap.id = "energyDashboardWrap";
+  wrap.innerHTML = `
+    <div class="card energy-analytics-card" id="energyAnalyticsCard">
+      <div class="energy-title-row">
+        <div>
+          <div class="energy-title">🔥 วิเคราะห์พลังงานสะสม</div>
+          <div class="energy-subtitle">คำนวณจาก kcal ที่กิน เทียบกับ kcal ที่เผารวม</div>
+        </div>
+      </div>
+
+      <div class="energy-metric-grid">
+        <div class="energy-metric">
+          <div class="label">กินทั้งหมด</div>
+          <div class="value" id="energyTotalFood">0</div>
+        </div>
+        <div class="energy-metric">
+          <div class="label">เผารวมทั้งหมด</div>
+          <div class="value good" id="energyTotalBurn">0</div>
+        </div>
+        <div class="energy-metric">
+          <div class="label">ขาดดุลสะสม</div>
+          <div class="value good" id="energyTotalDeficit">0</div>
+        </div>
+        <div class="energy-metric">
+          <div class="label">ลดไขมันโดยประมาณ</div>
+          <div class="value good" id="energyFatKg">0.00 kg</div>
+        </div>
+        <div class="energy-metric">
+          <div class="label">อีกกี่ kcal ถึงกิโลถัดไป</div>
+          <div class="value" id="energyToNextKg">7,700</div>
+        </div>
+        <div class="energy-metric">
+          <div class="label">น้ำหนักจริงจากบันทึก</div>
+          <div class="value" id="energyWeightChange">-</div>
+        </div>
+      </div>
+
+      <div class="energy-note" id="energyNote">
+        ใช้ค่าประมาณ 7,700 kcal ≈ ไขมัน 1 kg น้ำหนักจริงอาจแกว่งจากน้ำ กลัยโคเจน โซเดียม และอาหารค้างในระบบ
+      </div>
+    </div>
+
+    <div class="card energy-chart-card" id="energyChartCard">
+      <div class="energy-title-row">
+        <div>
+          <div class="energy-title">📊 กราฟ kcal กิน vs เผา</div>
+          <div class="energy-subtitle">เปรียบเทียบ kcal ที่กินกับ kcal ที่เผารวม</div>
+        </div>
+      </div>
+
+      <div class="energy-chart-tabs">
+        <button class="energy-chart-tab active" data-energy-chart-mode="daily">รายวัน</button>
+        <button class="energy-chart-tab" data-energy-chart-mode="monthly">รายเดือน</button>
+        <button class="energy-chart-tab" data-energy-chart-mode="yearly">รายปี</button>
+      </div>
+
+      <div class="energy-chart-list" id="energyChartList"></div>
+    </div>
+  `;
+
+  page.appendChild(wrap);
+  return document.getElementById("energyAnalyticsCard");
+}
+
+function renderEnergyAnalyticsDashboard(){
+  const card = ensureEnergyAnalyticsCard();
+  if(!card) return;
+
+  const rows = getEnergyDayRows();
+
+  const totalFood = rows.reduce((s,r) => s + r.food, 0);
+  const totalBurn = rows.reduce((s,r) => s + r.burn, 0);
+  const calorieBalance = totalBurn - totalFood; // positive = deficit
+  const totalDeficit = Math.max(0, calorieBalance);
+  const estimatedFatKg = totalDeficit / KCAL_PER_KG_FAT_ESTIMATE;
+
+  let toNextKg = KCAL_PER_KG_FAT_ESTIMATE;
+  if(totalDeficit > 0){
+    const mod = totalDeficit % KCAL_PER_KG_FAT_ESTIMATE;
+    toNextKg = mod === 0 ? 0 : KCAL_PER_KG_FAT_ESTIMATE - mod;
+  } else if(calorieBalance < 0){
+    toNextKg = KCAL_PER_KG_FAT_ESTIMATE + Math.abs(calorieBalance);
+  }
+
+  const totalDeficitEl = document.getElementById("energyTotalDeficit");
+  const fatKgEl = document.getElementById("energyFatKg");
+
+  document.getElementById("energyTotalFood").textContent = fmtEnergyNumber(totalFood);
+  document.getElementById("energyTotalBurn").textContent = fmtEnergyNumber(totalBurn);
+  document.getElementById("energyToNextKg").textContent = fmtEnergyNumber(toNextKg);
+  document.getElementById("energyFatKg").textContent = `${fmtEnergyKg(estimatedFatKg)} kg`;
+
+  if(calorieBalance >= 0){
+    totalDeficitEl.textContent = fmtEnergyNumber(totalDeficit);
+    totalDeficitEl.className = "value good";
+    fatKgEl.className = "value good";
+  } else {
+    totalDeficitEl.textContent = `+${fmtEnergyNumber(Math.abs(calorieBalance))}`;
+    totalDeficitEl.className = "value warn";
+    fatKgEl.className = "value warn";
+  }
+
+  const weight = getWeightChangeForEnergy();
+  const weightEl = document.getElementById("energyWeightChange");
+  if(weight){
+    const sign = weight.change > 0 ? "+" : "";
+    weightEl.textContent = `${sign}${fmtEnergyKg(weight.change)} kg`;
+    weightEl.className = "value " + (weight.change <= 0 ? "good" : "warn");
+  } else {
+    weightEl.textContent = "-";
+    weightEl.className = "value";
+  }
+
+  const noteEl = document.getElementById("energyNote");
+  if(calorieBalance >= 0){
+    noteEl.textContent = `จากข้อมูลทั้งหมด ระบบประเมินว่าขาดดุลสะสม ${fmtEnergyNumber(totalDeficit)} kcal หรือประมาณ ${fmtEnergyKg(estimatedFatKg)} kg ของไขมัน อีกประมาณ ${fmtEnergyNumber(toNextKg)} kcal ถึงกิโลถัดไป ทั้งหมดเป็นค่าประมาณ เพราะน้ำหนักจริงอาจแกว่งจากน้ำ กลัยโคเจน โซเดียม และอาหารค้างในระบบ`;
+  } else {
+    noteEl.textContent = `ตอนนี้พลังงานสะสมยังเกินอยู่ประมาณ ${fmtEnergyNumber(Math.abs(calorieBalance))} kcal ถ้าต้องการให้เข้าโซนลดไขมัน ต้องขาดดุลเพิ่มอีกประมาณ ${fmtEnergyNumber(toNextKg)} kcal เพื่อเทียบเท่าไขมัน 1 kg โดยประมาณ`;
+  }
+
+  const chartRows = getEnergyChartRows();
+  const chartList = document.getElementById("energyChartList");
+  const maxVal = Math.max(1, ...chartRows.flatMap(r => [r.food, r.burn]));
+
+  document.querySelectorAll("[data-energy-chart-mode]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.energyChartMode === energyChartMode);
+  });
+
+  chartList.innerHTML = "";
+
+  if(chartRows.length === 0){
+    chartList.innerHTML = '<div class="kcal-empty">ยังไม่มีข้อมูลสำหรับกราฟนี้</div>';
+    return;
+  }
+
+  chartRows.forEach(r => {
+    const foodPct = Math.min(100, (r.food / maxVal) * 100);
+    const burnPct = Math.min(100, (r.burn / maxVal) * 100);
+    const balanceClass = r.balance >= 0 ? "" : "surplus";
+    const balanceText = r.balance >= 0
+      ? `-${fmtEnergyNumber(r.balance)}`
+      : `+${fmtEnergyNumber(Math.abs(r.balance))}`;
+
+    const row = document.createElement("div");
+    row.className = "energy-chart-row";
+    row.innerHTML = `
+      <div class="energy-chart-head">
+        <div class="energy-chart-label">${r.label}</div>
+        <div class="energy-chart-balance ${balanceClass}">${balanceText}</div>
+      </div>
+
+      <div class="energy-bar-line">
+        <div>กิน</div>
+        <div class="energy-bar-track">
+          <div class="energy-bar-fill food" style="width:${foodPct}%"></div>
+        </div>
+        <div class="energy-bar-value">${fmtEnergyNumber(r.food)}</div>
+      </div>
+
+      <div class="energy-bar-line">
+        <div>เผา</div>
+        <div class="energy-bar-track">
+          <div class="energy-bar-fill burn" style="width:${burnPct}%"></div>
+        </div>
+        <div class="energy-bar-value">${fmtEnergyNumber(r.burn)}</div>
+      </div>
+    `;
+
+    chartList.appendChild(row);
+  });
+}
+
+document.addEventListener("click", function(e){
+  const btn = e.target.closest ? e.target.closest("[data-energy-chart-mode]") : null;
+  if(!btn) return;
+
+  energyChartMode = btn.dataset.energyChartMode || "daily";
+  renderEnergyAnalyticsDashboard();
+});
+
 
 function renderDashboard(){
   ensureDashboardState();

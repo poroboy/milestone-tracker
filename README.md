@@ -39,6 +39,14 @@ Model priority:
 
 If the first model is unavailable or in high demand, the Worker automatically falls back to the next model.
 
+### Energy Analytics
+- Total kcal consumed
+- Total kcal burned from base kcal plus exercise
+- Accumulated kcal deficit or surplus
+- Estimated fat loss using 7,700 kcal per 1 kg as an approximation
+- Remaining kcal to the next estimated 1 kg milestone
+- Daily, monthly, and yearly kcal chart comparing food intake vs total burn
+
 ### Dashboard
 - Yearly dashboard
 - Monthly kcal trend
