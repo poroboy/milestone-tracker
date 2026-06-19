@@ -1859,6 +1859,31 @@
     }
   }
 
+
+  /* energyGapFixV4 */
+  #energyDashboardWrap{
+    max-width:520px !important;
+    width:100% !important;
+    margin:10px 0 92px !important;
+    padding:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  #energyAnalyticsCard,
+  #energyChartCard{
+    margin:10px 0 !important;
+  }
+
+  .energy-force-column{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:10px !important;
+  }
+
+  .energy-force-column #energyDashboardWrap{
+    margin-top:10px !important;
+  }
+
 </style>
 </head>
 <body>
@@ -4906,6 +4931,43 @@ document.addEventListener("click", function(e){
   if(!tab) return;
 
   setTimeout(compactEnergyAnalyticsPlacementV3, 300);
+});
+
+
+function fixEnergyGapV4(){
+  const wrap = document.getElementById("energyDashboardWrap");
+  if(!wrap) return;
+
+  const cards = Array.from(document.querySelectorAll(".card"));
+  const insightCard = cards.find(card => {
+    const text = card.textContent || "";
+    return text.includes("วิเคราะห์ภาพรวม");
+  });
+
+  if(!insightCard) return;
+
+  const parent = insightCard.parentElement;
+  if(parent){
+    parent.classList.add("energy-force-column");
+
+    if(wrap.parentElement !== parent){
+      parent.appendChild(wrap);
+    }
+
+    if(insightCard.nextElementSibling !== wrap){
+      insightCard.insertAdjacentElement("afterend", wrap);
+    }
+  }
+}
+
+setTimeout(fixEnergyGapV4, 300);
+setTimeout(fixEnergyGapV4, 900);
+setTimeout(fixEnergyGapV4, 1600);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+  setTimeout(fixEnergyGapV4, 300);
 });
 
 </script>
