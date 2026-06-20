@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.7
-- Build: 2026.06.20.07
-- Notes: Cloud-first login copy
+- Version: v1.6.8
+- Build: 2026.06.20.08
+- Notes: Firebase bridge and single Sync Now
 
 ## Current Features
 

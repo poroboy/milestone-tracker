@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.7";
-const APP_BUILD_V1 = "2026.06.20.07";
-const APP_VERSION_NOTE_V1 = "Cloud-first login copy";
+const APP_VERSION_V1 = "v1.6.8";
+const APP_BUILD_V1 = "2026.06.20.08";
+const APP_VERSION_NOTE_V1 = "Firebase bridge and single Sync Now";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -8276,6 +8276,310 @@ setInterval(() => {
   }
 }, 120000);
 
+
+window.singleReliableSyncV8 = true;
+
+function syncStatusV8(text){
+  const el = document.getElementById("syncStatusV8");
+  if(el) el.textContent = text;
+  console.log(text);
+}
+
+function getFirebaseV8(){
+  return window.__mtFirebase || {
+    auth: window.auth,
+    db: window.db,
+    doc: window.doc,
+    getDoc: window.getDoc,
+    setDoc: window.setDoc
+  };
+}
+
+function getUserV8(){
+  const fb = getFirebaseV8();
+
+  return (
+    window.currentUser ||
+    fb?.auth?.currentUser ||
+    null
+  );
+}
+
+function cloneV8(obj){
+  try{
+    return JSON.parse(JSON.stringify(obj || {}));
+  }catch(err){
+    return {};
+  }
+}
+
+function normalizeCloudStateV8(data){
+  if(!data || typeof data !== "object") return {};
+  if(data.state && typeof data.state === "object") return data.state;
+  if(data.data && typeof data.data === "object") return data.data;
+  return data;
+}
+
+function itemKeyV8(item, type){
+  const name = String(item?.name || "").trim().toLowerCase();
+  const kcal = Number(item?.kcal) || 0;
+
+  if(type === "exercise"){
+    return [type, name, kcal].join("|");
+  }
+
+  const protein = Number(item?.protein) || 0;
+  const carb = Number(item?.carb ?? item?.carbs ?? item?.carbohydrate) || 0;
+  const sugar = Number(item?.sugar) || 0;
+  const fiber = Number(item?.fiber) || 0;
+
+  return [type, name, kcal, protein, carb, sugar, fiber].join("|");
+}
+
+function mergeListV8(localList, cloudList, type){
+  const out = [];
+  const seen = new Set();
+
+  [...(Array.isArray(cloudList) ? cloudList : []), ...(Array.isArray(localList) ? localList : [])].forEach(raw => {
+    const item = cloneV8(raw);
+
+    if(type === "food" && typeof normalizeFoodMetabolicItem === "function"){
+      try{ normalizeFoodMetabolicItem(item); }catch(err){}
+    }
+
+    const key = item.id || itemKeyV8(item, type);
+
+    if(!seen.has(key)){
+      seen.add(key);
+      out.push(item);
+    }
+  });
+
+  return out;
+}
+
+function mergeKcalDaysV8(localDays, cloudDays){
+  const local = localDays || {};
+  const cloud = cloudDays || {};
+  const dates = new Set([...Object.keys(cloud), ...Object.keys(local)]);
+  const merged = {};
+
+  dates.forEach(dateStr => {
+    const l = local[dateStr] || {};
+    const c = cloud[dateStr] || {};
+
+    const day = {
+      ...c,
+      ...l
+    };
+
+    const localBase = Number(l.baseKcal ?? l.base ?? 0) || 0;
+    const cloudBase = Number(c.baseKcal ?? c.base ?? 0) || 0;
+
+    day.baseKcal = localBase > 0 ? localBase : cloudBase;
+    day.food = mergeListV8(l.food, c.food, "food");
+    day.exercise = mergeListV8(l.exercise, c.exercise, "exercise");
+
+    merged[dateStr] = day;
+  });
+
+  return merged;
+}
+
+function mergeStateV8(localState, cloudState){
+  const local = cloneV8(localState);
+  const cloud = cloneV8(cloudState);
+
+  const merged = {
+    ...cloud,
+    ...local
+  };
+
+  merged.kcalDays = mergeKcalDaysV8(local.kcalDays, cloud.kcalDays);
+
+  merged.weightLogs = Array.isArray(local.weightLogs) || Array.isArray(cloud.weightLogs)
+    ? [...(Array.isArray(cloud.weightLogs) ? cloud.weightLogs : []), ...(Array.isArray(local.weightLogs) ? local.weightLogs : [])]
+    : { ...(cloud.weightLogs || {}), ...(local.weightLogs || {}) };
+
+  merged.__clientUpdatedAt = Date.now();
+  merged.__syncUpdatedAt = Date.now();
+  merged.__syncVersion = "v1.6.8";
+
+  return merged;
+}
+
+function replaceStateV8(nextState){
+  if(typeof state !== "object" || !state) return;
+
+  Object.keys(state).forEach(key => delete state[key]);
+  Object.assign(state, nextState);
+}
+
+function renderAfterSyncV8(){
+  [
+    "renderHome",
+    "renderKcalPage",
+    "renderDashboard",
+    "renderKcalInsulinInsight",
+    "renderDashboardInsulinInsight",
+    "enhanceDashboardOverviewMetabolicV1",
+    "renderEnergyAnalyticsDashboard"
+  ].forEach(name => {
+    try{
+      if(typeof window[name] === "function") window[name]();
+      else if(typeof globalThis[name] === "function") globalThis[name]();
+    }catch(err){}
+  });
+
+  setTimeout(ensureSingleSyncButtonV8, 200);
+}
+
+async function syncNowV8(reason = "manual"){
+  if(window.__syncNowRunningV8) return;
+
+  const fb = getFirebaseV8();
+  const user = getUserV8();
+
+  const missing = [];
+  if(!user?.uid) missing.push("user");
+  if(!fb?.db) missing.push("db");
+  if(typeof fb?.doc !== "function") missing.push("doc");
+  if(typeof fb?.getDoc !== "function") missing.push("getDoc");
+  if(typeof fb?.setDoc !== "function") missing.push("setDoc");
+
+  if(missing.length){
+    syncStatusV8("sync: ยังไม่พร้อม (" + missing.join(", ") + ")");
+    return;
+  }
+
+  window.__syncNowRunningV8 = true;
+  syncStatusV8("sync: กำลังซิงก์...");
+
+  try{
+    const ref = fb.doc(fb.db, "users", user.uid, "tracker", "state");
+
+    const localSnapshot = cloneV8(state);
+    const snap = await fb.getDoc(ref);
+    const cloudSnapshot = snap.exists() ? normalizeCloudStateV8(snap.data()) : {};
+
+    const merged = mergeStateV8(localSnapshot, cloudSnapshot);
+
+    replaceStateV8(merged);
+
+    await fb.setDoc(ref, merged, { merge:false });
+
+    try{
+      if(typeof saveState === "function") saveState();
+    }catch(err){}
+
+    renderAfterSyncV8();
+
+    const time = new Date().toLocaleTimeString("th-TH", {
+      hour:"2-digit",
+      minute:"2-digit"
+    });
+
+    syncStatusV8(`sync: สำเร็จ ${time} · uid ${user.uid.slice(-6)} · ${reason}`);
+    console.log("sync success v1.6.8", { reason, uid:user.uid, merged });
+  }catch(err){
+    console.error("sync failed v1.6.8", err);
+    syncStatusV8("sync: ไม่สำเร็จ ดู Console");
+  }finally{
+    setTimeout(() => {
+      window.__syncNowRunningV8 = false;
+    }, 800);
+  }
+}
+
+function ensureSingleSyncButtonV8(){
+  const dataTools = document.querySelector(".data-tools-card");
+  if(!dataTools) return;
+
+  const actions = dataTools.querySelector(".data-tool-actions") || dataTools;
+
+  const oldBtns = Array.from(dataTools.querySelectorAll("button")).filter(btn => {
+    const text = (btn.textContent || "").trim().toLowerCase();
+    return text === "sync now" || /^syncNowBtnV/i.test(btn.id || "");
+  });
+
+  let btn = oldBtns[0];
+
+  oldBtns.slice(1).forEach(el => el.remove());
+
+  if(!btn){
+    btn = document.createElement("button");
+    actions.appendChild(btn);
+  }
+
+  btn.id = "syncNowBtnV8";
+  btn.type = "button";
+  btn.className = "sync-now-btn-v4";
+  btn.textContent = "Sync Now";
+  btn.onclick = function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    syncNowV8("manual-button");
+  };
+
+  const oldStatuses = Array.from(dataTools.querySelectorAll("#syncStatusV4, #syncStatusV5, #syncStatusV6, .sync-status-v4"));
+  let status = oldStatuses[0];
+
+  oldStatuses.slice(1).forEach(el => el.remove());
+
+  if(!status){
+    status = document.createElement("div");
+    dataTools.appendChild(status);
+  }
+
+  status.id = "syncStatusV8";
+  status.className = "sync-status-v4";
+
+  const user = getUserV8();
+  if(user?.uid && (!status.textContent || status.textContent.includes("ยังไม่พร้อม") || status.textContent.includes("รอ login"))){
+    status.textContent = "sync: พร้อม · uid " + user.uid.slice(-6);
+  }else if(!status.textContent){
+    status.textContent = "sync: รอ login";
+  }
+}
+
+// override older sync engines to use v8
+try{ saveCloudStateNow = async function(force=false){ return syncNowV8(force ? "save-force" : "save"); }; }catch(err){}
+try{ syncNowV5 = async function(reason="manual"){ return syncNowV8(reason); }; }catch(err){}
+try{ syncNowCloudUnionV4 = async function(reason="manual"){ return syncNowV8(reason); }; }catch(err){}
+try{ forceCloudSaveFreshnessV1 = async function(reason="freshness"){ return syncNowV8(reason); }; }catch(err){}
+try{ scheduleForceCloudSaveFreshnessV1 = function(reason="action"){ clearTimeout(window.__syncV8Timer); window.__syncV8Timer = setTimeout(() => syncNowV8(reason), 1300); }; }catch(err){}
+
+document.addEventListener("click", function(e){
+  const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+  if(!btn) return;
+
+  if(btn.id === "syncNowBtnV8" || btn.textContent?.trim() === "Sync Now"){
+    e.preventDefault();
+    syncNowV8("manual-delegated");
+    return;
+  }
+
+  const id = btn.id || "";
+  const text = (btn.textContent || "").trim();
+
+  const shouldSync =
+    /add|save|reset|delete|backdate|Food|Exercise|Weight/i.test(id) ||
+    /เพิ่ม|บันทึก|ลบ|Reset|แก้ไขย้อนหลัง|×|\+/.test(text);
+
+  if(shouldSync){
+    clearTimeout(window.__autoSyncV8);
+    window.__autoSyncV8 = setTimeout(() => syncNowV8("after-action"), 1800);
+  }
+}, true);
+
+setTimeout(ensureSingleSyncButtonV8, 500);
+setTimeout(ensureSingleSyncButtonV8, 1500);
+setTimeout(() => syncNowV8("initial"), 3000);
+
+window.addEventListener("focus", function(){
+  setTimeout(() => syncNowV8("focus"), 1200);
+});
+
 </script>
 
 
@@ -8327,7 +8631,39 @@ const db = getFirestore(app);
     };
     const provider = new GoogleAuthProvider();
 
-    await setPersistence(auth, browserLocalPersistence);
+    
+
+// firebaseBridgeForSyncV8
+if(!window.firebaseBridgeForSyncV8){
+  window.firebaseBridgeForSyncV8 = true;
+
+  window.__mtFirebase = {
+    app,
+    auth,
+    provider,
+    db,
+    doc,
+    getDoc,
+    setDoc,
+    onSnapshot
+  };
+
+  window.auth = auth;
+  window.db = db;
+  window.doc = doc;
+  window.getDoc = getDoc;
+  window.setDoc = setDoc;
+  window.onSnapshot = onSnapshot;
+
+  try{
+    onAuthStateChanged(auth, (user) => {
+      window.currentUser = user || null;
+    });
+  }catch(err){
+    console.warn("auth bridge listener failed", err);
+  }
+}
+await setPersistence(auth, browserLocalPersistence);
 
     getRedirectResult(auth).catch((error) => {
       showAuthError(error.message);
