@@ -6847,6 +6847,188 @@ document.addEventListener("click", function(e){
   setTimeout(ensureBackdateEditorV1, 400);
 });
 
+
+window.saveFreshnessGuardV1 = true;
+
+const LOCAL_STATE_STAMP_KEY_V1 = "milestone_tracker_local_updated_at_v1";
+
+function markStateChangedV1(){
+  if(typeof state !== "object" || !state) return 0;
+
+  const stamp = Date.now();
+  state.__clientUpdatedAt = stamp;
+
+  try{
+    localStorage.setItem(LOCAL_STATE_STAMP_KEY_V1, String(stamp));
+  }catch(err){
+    console.warn("Cannot write local update stamp", err);
+  }
+
+  return stamp;
+}
+
+function getStateStampV1(obj){
+  const fromState = Number(obj && obj.__clientUpdatedAt);
+  if(Number.isFinite(fromState) && fromState > 0) return fromState;
+
+  const fromLocal = Number(localStorage.getItem(LOCAL_STATE_STAMP_KEY_V1));
+  if(Number.isFinite(fromLocal) && fromLocal > 0) return fromLocal;
+
+  return 0;
+}
+
+function cloneStateSafeV1(){
+  try{
+    return JSON.parse(JSON.stringify(state || {}));
+  }catch(err){
+    console.warn("Cannot clone current state", err);
+    return null;
+  }
+}
+
+window.__originalSaveStateFreshnessV1 =
+  window.__originalSaveStateFreshnessV1 ||
+  (typeof saveState === "function" ? saveState : null);
+
+async function forceCloudSaveFreshnessV1(reason = "manual"){
+  markStateChangedV1();
+
+  try{
+    if(window.__originalSaveStateFreshnessV1){
+      window.__originalSaveStateFreshnessV1();
+    }
+  }catch(err){
+    console.warn("Local save failed:", reason, err);
+  }
+
+  if(typeof currentUser !== "undefined" && currentUser && typeof saveCloudStateNow === "function"){
+    try{
+      await saveCloudStateNow(true);
+      console.log("Force cloud saved:", reason);
+    }catch(err){
+      console.warn("Force cloud save failed:", reason, err);
+    }
+  }
+}
+
+function scheduleForceCloudSaveFreshnessV1(reason = "action"){
+  clearTimeout(window.__forceCloudSaveTimerFreshnessV1);
+
+  window.__forceCloudSaveTimerFreshnessV1 = setTimeout(() => {
+    forceCloudSaveFreshnessV1(reason);
+  }, 150);
+
+  setTimeout(() => forceCloudSaveFreshnessV1(reason + "-retry-1"), 900);
+  setTimeout(() => forceCloudSaveFreshnessV1(reason + "-retry-2"), 2500);
+}
+
+function rerenderAfterFreshnessRestoreV1(){
+  const fns = [
+    "renderHome",
+    "renderKcalPage",
+    "renderDashboard",
+    "renderMonthSummary",
+    "renderKcalInsulinInsight",
+    "renderDashboardInsulinInsight",
+    "enhanceDashboardOverviewMetabolicV1",
+    "renderEnergyAnalyticsDashboard"
+  ];
+
+  fns.forEach(name => {
+    try{
+      if(typeof window[name] === "function") window[name]();
+      else if(typeof globalThis[name] === "function") globalThis[name]();
+    }catch(err){
+      console.warn("Render failed:", name, err);
+    }
+  });
+}
+
+// Wrap saveState: every save gets a timestamp and stronger cloud sync
+if(typeof saveState === "function" && !saveState.__freshnessGuardWrapped){
+  const originalSaveStateFreshnessV1 = saveState;
+  window.__originalSaveStateFreshnessV1 = originalSaveStateFreshnessV1;
+
+  saveState = function(...args){
+    markStateChangedV1();
+
+    const result = originalSaveStateFreshnessV1.apply(this, args);
+
+    scheduleForceCloudSaveFreshnessV1("saveState");
+
+    return result;
+  };
+
+  saveState.__freshnessGuardWrapped = true;
+}
+
+// Wrap cloud loading: if local is newer than cloud, restore local and upload it
+if(typeof loadCloudState === "function" && !loadCloudState.__freshnessGuardWrapped){
+  const originalLoadCloudStateFreshnessV1 = loadCloudState;
+
+  loadCloudState = async function(...args){
+    const localSnapshot = cloneStateSafeV1();
+    const localStamp = getStateStampV1(localSnapshot);
+
+    const result = await originalLoadCloudStateFreshnessV1.apply(this, args);
+
+    const loadedCloudStamp = getStateStampV1(state);
+
+    if(localSnapshot && localStamp > 0 && loadedCloudStamp > 0 && localStamp > loadedCloudStamp){
+      console.warn("Cloud data is older than local data. Restoring local state.");
+
+      Object.keys(state).forEach(key => delete state[key]);
+      Object.assign(state, localSnapshot);
+
+      await forceCloudSaveFreshnessV1("restore-newer-local-over-cloud");
+      rerenderAfterFreshnessRestoreV1();
+    }
+
+    // ถ้า cloud ไม่มี stamp แต่ local มี stamp จาก session นี้ ให้กัน cloud เก่าทับ local
+    if(localSnapshot && localStamp > 0 && loadedCloudStamp === 0){
+      console.warn("Cloud data has no freshness stamp. Keeping local state.");
+
+      Object.keys(state).forEach(key => delete state[key]);
+      Object.assign(state, localSnapshot);
+
+      await forceCloudSaveFreshnessV1("restore-local-no-cloud-stamp");
+      rerenderAfterFreshnessRestoreV1();
+    }
+
+    return result;
+  };
+
+  loadCloudState.__freshnessGuardWrapped = true;
+}
+
+// Important buttons/actions: force save after add/edit/delete/reset/backdate
+document.addEventListener("click", function(e){
+  const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+  if(!btn) return;
+
+  const id = btn.id || "";
+  const text = (btn.textContent || "").trim();
+
+  const isImportantAction =
+    /add|save|reset|delete|backdate|currentWeight|Food|Exercise/i.test(id) ||
+    /บันทึก|เพิ่ม|ลบ|Reset|แก้ไขย้อนหลัง|วันนี้|×|\+/.test(text);
+
+  if(isImportantAction){
+    setTimeout(() => scheduleForceCloudSaveFreshnessV1("important-click"), 80);
+  }
+});
+
+// When page is leaving, at least local save is stamped and cloud save is attempted
+window.addEventListener("pagehide", function(){
+  forceCloudSaveFreshnessV1("pagehide");
+});
+
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "hidden"){
+    forceCloudSaveFreshnessV1("visibility-hidden");
+  }
+});
+
 </script>
 
 
