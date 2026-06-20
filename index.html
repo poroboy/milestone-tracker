@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.11";
-const APP_BUILD_V1 = "2026.06.20.11";
-const APP_VERSION_NOTE_V1 = "Fix login after Firestore import cleanup";
+const APP_VERSION_V1 = "v1.6.12";
+const APP_BUILD_V1 = "2026.06.21.12";
+const APP_VERSION_NOTE_V1 = "Restore login and reliable cross-device sync";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -9117,6 +9117,304 @@ setTimeout(() => {
   }catch(err){}
 }, 1200);
 
+
+// reliableCrossDeviceSyncV12
+// Firestore is the shared source of truth after login. Local storage remains an
+// offline cache, and only days changed on this device are written back.
+window.reliableCrossDeviceSyncV12 = true;
+
+const SYNC_CLIENT_KEY_V12 = "milestone_tracker_sync_client_v12";
+const SYNC_BOOTSTRAP_KEY_V12 = "milestone_tracker_sync_bootstrapped_v12";
+
+function getSyncClientIdV12(){
+  let id = localStorage.getItem(SYNC_CLIENT_KEY_V12);
+  if(!id){
+    id = typeof crypto?.randomUUID === "function"
+      ? crypto.randomUUID()
+      : "client-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+    localStorage.setItem(SYNC_CLIENT_KEY_V12, id);
+  }
+  return id;
+}
+
+function localDayV12(raw){
+  const day = sanitizeDayV9(raw);
+  return {
+    base: day.baseKcal,
+    food: day.food,
+    exercise: day.exercise
+  };
+}
+
+function dayHashV12(raw){
+  return JSON.stringify(localDayV12(raw));
+}
+
+function dayHashesV12(days){
+  const hashes = {};
+  Object.entries(days || {}).forEach(([dateStr, day]) => {
+    hashes[dateStr] = dayHashV12(day);
+  });
+  return hashes;
+}
+
+function dayHasContentV12(day){
+  const normalized = localDayV12(day);
+  return normalized.base > 0 || normalized.food.length > 0 || normalized.exercise.length > 0;
+}
+
+function cloudDayV12(day, clientId){
+  const normalized = localDayV12(day);
+  return {
+    baseKcal: normalized.base,
+    food: normalized.food,
+    exercise: normalized.exercise,
+    updatedAtMs: Date.now(),
+    updatedBy: clientId,
+    syncVersion: "v1.6.12"
+  };
+}
+
+function selectDayForSyncV12(localDay, cloudDay, options){
+  const dirty = !!options?.dirty;
+  const firstSync = !!options?.firstSync;
+  const cloudExists = !!options?.cloudExists;
+
+  if(dirty){
+    return { day: localDayV12(localDay), shouldWrite: true };
+  }
+
+  if(
+    firstSync &&
+    cloudExists &&
+    dayHasContentV12(localDay) &&
+    dayHashV12(localDay) !== dayHashV12(cloudDay)
+  ){
+    return {
+      day: localDayV12(mergeDayV9(localDay, cloudDay)),
+      shouldWrite: true
+    };
+  }
+
+  if(cloudExists){
+    return { day: localDayV12(cloudDay), shouldWrite: false };
+  }
+
+  if(dayHasContentV12(localDay)){
+    return { day: localDayV12(localDay), shouldWrite: true };
+  }
+
+  return null;
+}
+
+function masterStateV12(source, clientId){
+  const master = cloneV9(source);
+  delete master.kcalDays;
+  delete master.aiChatHistory;
+  delete master.chatHistory;
+  delete master.aiMessages;
+  delete master.messages;
+  master.__cloudStorageMode = "split-per-day-v1";
+  master.__syncVersion = "v1.6.12";
+  master.__syncUpdatedAt = Date.now();
+  master.__clientUpdatedAt = Date.now();
+  master.__updatedBy = clientId;
+  return master;
+}
+
+function cloudMasterV12(raw){
+  const master = cloneV9(normalizeCloudDocV9(raw));
+  delete master.kcalDays;
+  delete master.aiChatHistory;
+  delete master.chatHistory;
+  delete master.aiMessages;
+  delete master.messages;
+  return master;
+}
+
+window.__dirtyDaysV12 = window.__dirtyDaysV12 || new Set();
+window.__masterDirtyV12 = false;
+window.__masterChangeSeqV12 = 0;
+window.__dayHashesV12 = dayHashesV12(state?.kcalDays);
+
+if(typeof saveState === "function" && !saveState.__syncV12Wrapped){
+  const saveStateBeforeV12 = saveState;
+
+  saveState = function(...args){
+    if(!window.__syncApplyingV12){
+      const nextHashes = dayHashesV12(state?.kcalDays);
+      const dates = new Set([
+        ...Object.keys(window.__dayHashesV12 || {}),
+        ...Object.keys(nextHashes)
+      ]);
+
+      dates.forEach(dateStr => {
+        if((window.__dayHashesV12 || {})[dateStr] !== nextHashes[dateStr]){
+          window.__dirtyDaysV12.add(dateStr);
+        }
+      });
+
+      window.__dayHashesV12 = nextHashes;
+      window.__masterDirtyV12 = true;
+      window.__masterChangeSeqV12 += 1;
+    }
+
+    return saveStateBeforeV12.apply(this, args);
+  };
+
+  saveState.__syncV12Wrapped = true;
+}
+
+async function syncNowV12(reason = "manual"){
+  if(window.__syncNowRunningV12) return;
+
+  const refs = getRefsV9();
+  if(!refs) return;
+
+  window.__syncNowRunningV12 = true;
+  syncStatusV9("sync: กำลังซิงก์...");
+
+  const clientId = getSyncClientIdV12();
+  const startSeq = window.__masterChangeSeqV12;
+  const localSnapshot = cloneV9(state);
+  const dirtyAtStart = new Map();
+
+  window.__dirtyDaysV12.forEach(dateStr => {
+    dirtyAtStart.set(dateStr, dayHashV12(localSnapshot.kcalDays?.[dateStr]));
+  });
+
+  try{
+    const masterSnap = await refs.fb.getDoc(refs.masterRef);
+    const rawMaster = masterSnap.exists() ? normalizeCloudDocV9(masterSnap.data()) : {};
+    const legacyDays = rawMaster?.kcalDays || {};
+    const cloudMaster = cloudMasterV12(rawMaster);
+
+    const cloudDays = {};
+    const cloudDayIds = new Set();
+
+    Object.entries(legacyDays).forEach(([dateStr, day]) => {
+      cloudDays[dateStr] = localDayV12(day);
+      cloudDayIds.add(dateStr);
+    });
+
+    const daysSnap = await refs.fb.getDocs(refs.daysCol);
+    daysSnap.forEach(docSnap => {
+      cloudDays[docSnap.id] = localDayV12(normalizeCloudDocV9(docSnap.data()));
+      cloudDayIds.add(docSnap.id);
+    });
+
+    const localDays = localSnapshot.kcalDays || {};
+    const isFirstClientSync = localStorage.getItem(SYNC_BOOTSTRAP_KEY_V12) !== "1";
+    const allDates = new Set([...Object.keys(localDays), ...Object.keys(cloudDays)]);
+    const nextDays = {};
+    const daysToWrite = new Set(dirtyAtStart.keys());
+
+    allDates.forEach(dateStr => {
+      const selected = selectDayForSyncV12(
+        localDays[dateStr],
+        cloudDays[dateStr],
+        {
+          dirty: dirtyAtStart.has(dateStr),
+          firstSync: isFirstClientSync,
+          cloudExists: cloudDayIds.has(dateStr)
+        }
+      );
+
+      if(selected){
+        nextDays[dateStr] = selected.day;
+      }
+
+      if(selected?.shouldWrite){
+        daysToWrite.add(dateStr);
+      }
+    });
+
+    const localMasterStamp = Number(localSnapshot.__clientUpdatedAt) || 0;
+    const cloudMasterStamp = Number(cloudMaster.__clientUpdatedAt) || 0;
+    const firstSyncPrefersLocalMaster = isFirstClientSync && localMasterStamp > cloudMasterStamp;
+    const shouldWriteMaster =
+      window.__masterDirtyV12 ||
+      !masterSnap.exists() ||
+      firstSyncPrefersLocalMaster;
+    const selectedMaster = shouldWriteMaster
+      ? masterStateV12(localSnapshot, clientId)
+      : cloudMaster;
+
+    if(shouldWriteMaster){
+      await refs.fb.setDoc(refs.masterRef, selectedMaster, { merge:false });
+    }
+
+    for(const dateStr of daysToWrite){
+      const dayRef = refs.fb.doc(refs.fb.db, "users", refs.user.uid, "kcalDays", dateStr);
+      await refs.fb.setDoc(dayRef, cloudDayV12(nextDays[dateStr], clientId), { merge:false });
+    }
+
+    const changedDuringSync = window.__masterChangeSeqV12 !== startSeq;
+
+    if(!changedDuringSync){
+      const nextState = {
+        ...localSnapshot,
+        ...selectedMaster,
+        kcalDays: nextDays,
+        aiChatHistory: Array.isArray(localSnapshot.aiChatHistory)
+          ? localSnapshot.aiChatHistory.slice(-40)
+          : []
+      };
+
+      window.__syncApplyingV12 = true;
+      replaceStateV9(nextState);
+      localStorage.setItem("milestoneAppState", JSON.stringify(state));
+      window.__syncApplyingV12 = false;
+
+      window.__dayHashesV12 = dayHashesV12(state.kcalDays);
+      window.__masterDirtyV12 = false;
+      localStorage.setItem(SYNC_BOOTSTRAP_KEY_V12, "1");
+
+      dirtyAtStart.forEach((writtenHash, dateStr) => {
+        if(dayHashV12(state.kcalDays?.[dateStr]) === writtenHash){
+          window.__dirtyDaysV12.delete(dateStr);
+        }
+      });
+
+      renderAfterSyncV9();
+    }else{
+      setTimeout(() => syncNowV12("changes-during-sync"), 700);
+    }
+
+    const time = new Date().toLocaleTimeString("th-TH", {
+      hour:"2-digit",
+      minute:"2-digit"
+    });
+    syncStatusV9(`sync: สำเร็จ ${time} · uid ${refs.user.uid.slice(-6)} · ${reason}`);
+  }catch(err){
+    window.__syncApplyingV12 = false;
+    console.error("sync failed v1.6.12", err);
+    syncStatusV9("sync: ไม่สำเร็จ ดู Console");
+  }finally{
+    window.__syncNowRunningV12 = false;
+  }
+}
+
+// Replace every older entry point so only one sync engine can read/write data.
+try{ syncNowV9 = syncNowV12; }catch(err){}
+try{ syncNowV8 = syncNowV12; }catch(err){}
+try{ syncNowV5 = syncNowV12; }catch(err){}
+try{ syncNowCloudUnionV4 = syncNowV12; }catch(err){}
+try{ saveCloudStateNow = async function(force=false){ return syncNowV12(force ? "save-force" : "save"); }; }catch(err){}
+try{ forceCloudSaveFreshnessV1 = async function(reason="freshness"){ return syncNowV12(reason); }; }catch(err){}
+try{ scheduleForceCloudSaveFreshnessV1 = function(reason="action"){
+  clearTimeout(window.__syncV12Timer);
+  window.__syncV12Timer = setTimeout(() => syncNowV12(reason), 900);
+}; }catch(err){}
+
+try{
+  loadCloudState = async function(user){
+    currentUser = user;
+    window.currentUser = user;
+    return syncNowV12("auth-load");
+  };
+}catch(err){}
+
 </script>
 
 
@@ -9125,7 +9423,28 @@ setTimeout(() => {
   // FIREBASE AUTH — Replace firebaseConfig with your project config
   // Firebase Console > Project settings > Your apps > Web app config
   // ============================================================
-  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
+  import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult,
+    onAuthStateChanged,
+    signOut,
+    browserLocalPersistence,
+    setPersistence
+  } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    collection,
+    getDocs,
+    onSnapshot,
+    serverTimestamp
+  } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",
@@ -9224,7 +9543,9 @@ if(!window.firebaseBridgeForSyncV8){
     doc,
     getDoc,
     setDoc,
-    onSnapshot
+    onSnapshot,
+    collection,
+    getDocs
   };
 
   window.auth = auth;
