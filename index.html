@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.13";
-const APP_BUILD_V1 = "2026.06.21.13";
-const APP_VERSION_NOTE_V1 = "Allow secure per-day Firestore sync";
+const APP_VERSION_V1 = "v1.6.14";
+const APP_BUILD_V1 = "2026.06.21.14";
+const APP_VERSION_NOTE_V1 = "Remove undefined fields before Firestore writes";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -8586,20 +8586,20 @@ try{
   if(window.__mtFirebase){
     if(typeof collection !== "undefined") window.__mtFirebase.collection = collection;
     if(typeof getDocs !== "undefined") window.__mtFirebase.getDocs = getDocs;
-    window.__mtFirebase.getDoc = getDoc;
-    window.__mtFirebase.setDoc = setDoc;
-    window.__mtFirebase.doc = doc;
-    window.__mtFirebase.db = db;
-    window.__mtFirebase.auth = auth;
+    if(typeof getDoc !== "undefined") window.__mtFirebase.getDoc = getDoc;
+    if(typeof setDoc !== "undefined") window.__mtFirebase.setDoc = setDoc;
+    if(typeof doc !== "undefined") window.__mtFirebase.doc = doc;
+    if(typeof db !== "undefined") window.__mtFirebase.db = db;
+    if(typeof auth !== "undefined") window.__mtFirebase.auth = auth;
   }
 
   if(typeof collection !== "undefined") window.collection = collection;
   if(typeof getDocs !== "undefined") window.getDocs = getDocs;
-  window.getDoc = getDoc;
-  window.setDoc = setDoc;
-  window.doc = doc;
-  window.db = db;
-  window.auth = auth;
+  if(typeof getDoc !== "undefined") window.getDoc = getDoc;
+  if(typeof setDoc !== "undefined") window.setDoc = setDoc;
+  if(typeof doc !== "undefined") window.doc = doc;
+  if(typeof db !== "undefined") window.db = db;
+  if(typeof auth !== "undefined") window.auth = auth;
   window.firebaseBridgeSplitDayV9 = true;
 }catch(err){
   console.warn("firebase split-day bridge failed", err);
@@ -8687,26 +8687,34 @@ function sanitizeFoodV9(raw){
     try{ normalizeFoodMetabolicItem(item); }catch(err){}
   }
 
-  return {
-    id: item.id || undefined,
+  const sanitized = {
     name: item.name,
     kcal: item.kcal,
     protein: item.protein,
     carb: item.carb,
     sugar: item.sugar,
-    fiber: item.fiber,
-    spikeRisk: item.spikeRisk || item.glucoseSpikeRisk || undefined
+    fiber: item.fiber
   };
+
+  if(item.id) sanitized.id = String(item.id);
+
+  const spikeRisk = item.spikeRisk || item.glucoseSpikeRisk;
+  if(spikeRisk) sanitized.spikeRisk = spikeRisk;
+
+  return sanitized;
 }
 
 function sanitizeExerciseV9(raw){
   const item = cloneV9(raw);
 
-  return {
-    id: item.id || undefined,
+  const sanitized = {
     name: String(item.name || "").slice(0, 160),
     kcal: Number(item.kcal) || 0
   };
+
+  if(item.id) sanitized.id = String(item.id);
+
+  return sanitized;
 }
 
 function sanitizeDayV9(day){
@@ -9171,7 +9179,7 @@ function cloudDayV12(day, clientId){
     exercise: normalized.exercise,
     updatedAtMs: Date.now(),
     updatedBy: clientId,
-    syncVersion: "v1.6.13"
+    syncVersion: "v1.6.14"
   };
 }
 
@@ -9215,7 +9223,7 @@ function masterStateV12(source, clientId){
   delete master.aiMessages;
   delete master.messages;
   master.__cloudStorageMode = "split-per-day-v1";
-  master.__syncVersion = "v1.6.13";
+  master.__syncVersion = "v1.6.14";
   master.__syncUpdatedAt = Date.now();
   master.__clientUpdatedAt = Date.now();
   master.__updatedBy = clientId;
@@ -9394,10 +9402,10 @@ async function syncNowV12(reason = "manual"){
 
     if(permissionDenied){
       window.__syncPermissionRetryAtV13 = Date.now() + 15000;
-      console.error("sync blocked by Firestore rules v1.6.13", err);
+      console.error("sync blocked by Firestore rules v1.6.14", err);
       syncStatusV9("sync: Firestore ยังไม่อนุญาต · ลองใหม่ใน 15 วินาที");
     }else{
-      console.error("sync failed v1.6.13", err);
+      console.error("sync failed v1.6.14", err);
       syncStatusV9("sync: ไม่สำเร็จ ดู Console");
     }
   }finally{
