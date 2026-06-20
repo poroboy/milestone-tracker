@@ -7062,9 +7062,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.2";
-const APP_BUILD_V1 = "2026.06.20.02";
-const APP_VERSION_NOTE_V1 = "Cross-device cloud sync fix";
+const APP_VERSION_V1 = "v1.6.3";
+const APP_BUILD_V1 = "2026.06.20.03";
+const APP_VERSION_NOTE_V1 = "Login and Firebase import fix";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -7469,7 +7469,8 @@ setTimeout(startCrossDeviceCloudListenerV2, 3000);
   // FIREBASE AUTH — Replace firebaseConfig with your project config
   // Firebase Console > Project settings > Your apps > Web app config
   // ============================================================
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
+  import {
+initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
   import {
     getAuth,
     GoogleAuthProvider,
@@ -7486,7 +7487,8 @@ import {getFirestore,
   doc,
   getDoc,
   setDoc,
-  serverTimestamp, onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  serverTimestamp, onSnapshot
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",
@@ -7542,15 +7544,27 @@ const db = getFirestore(app);
   try {
     await signInWithPopup(auth, provider);
   } catch (error) {
-    // Popup may be blocked on some mobile browsers / PWA mode, so redirect is the fallback
-    if ([
+    console.warn('Google popup login failed, using redirect fallback:', error);
+
+    const fallbackCodes = [
       'auth/popup-blocked',
       'auth/popup-closed-by-user',
-      'auth/cancelled-popup-request'
-    ].includes(error.code)) {
-      await signInWithRedirect(auth, provider);
+      'auth/cancelled-popup-request',
+      'auth/operation-not-supported-in-this-environment',
+      'auth/web-storage-unsupported',
+      'auth/internal-error'
+    ];
+
+    if (fallbackCodes.includes(error.code)) {
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (redirectError) {
+        console.error('Google redirect login failed:', redirectError);
+        showAuthError(redirectError.message || 'Redirect login failed');
+        loginBtn.disabled = false;
+      }
     } else {
-      showAuthError(error.message);
+      showAuthError(error.message || 'เข้าสู่ระบบไม่สำเร็จ');
       loginBtn.disabled = false;
     }
   }
