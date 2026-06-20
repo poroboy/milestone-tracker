@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.4";
-const APP_BUILD_V1 = "2026.06.20.04";
-const APP_VERSION_NOTE_V1 = "Cross-device union sync";
+const APP_VERSION_V1 = "v1.6.5";
+const APP_BUILD_V1 = "2026.06.20.05";
+const APP_VERSION_NOTE_V1 = "Reliable Sync Now with auth fallback";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -7813,6 +7813,352 @@ window.addEventListener("focus", function(){
 setTimeout(ensureSyncNowButtonCloudUnionV4, 800);
 setTimeout(() => syncNowCloudUnionV4("initial"), 2500);
 setInterval(() => syncNowCloudUnionV4("interval"), 30000);
+
+
+window.reliableSyncNowV5 = true;
+
+function setSyncStatusV5(text){
+  const el = document.getElementById("syncStatusV5") || document.getElementById("syncStatusV4");
+  if(el) el.textContent = text;
+  console.log(text);
+}
+
+function getCurrentUserV5(){
+  try{
+    if(typeof currentUser !== "undefined" && currentUser && currentUser.uid){
+      return currentUser;
+    }
+  }catch(err){}
+
+  try{
+    if(typeof auth !== "undefined" && auth && auth.currentUser && auth.currentUser.uid){
+      return auth.currentUser;
+    }
+  }catch(err){}
+
+  try{
+    if(window.currentUser && window.currentUser.uid){
+      return window.currentUser;
+    }
+  }catch(err){}
+
+  return null;
+}
+
+function getTrackerDocRefV5(){
+  const user = getCurrentUserV5();
+  const missing = [];
+
+  if(!user) missing.push("user");
+  if(typeof db === "undefined" || !db) missing.push("db");
+  if(typeof doc !== "function") missing.push("doc");
+  if(typeof getDoc !== "function") missing.push("getDoc");
+  if(typeof setDoc !== "function") missing.push("setDoc");
+
+  if(missing.length){
+    setSyncStatusV5("sync: ยังไม่พร้อม (" + missing.join(", ") + ")");
+    return null;
+  }
+
+  return doc(db, "users", user.uid, "tracker", "state");
+}
+
+function cloneStateV5(obj){
+  try{
+    return JSON.parse(JSON.stringify(obj || {}));
+  }catch(err){
+    console.warn("clone state failed", err);
+    return {};
+  }
+}
+
+function normalizeCloudV5(data){
+  if(!data || typeof data !== "object") return {};
+  if(data.state && typeof data.state === "object") return data.state;
+  if(data.data && typeof data.data === "object") return data.data;
+  return data;
+}
+
+function itemKeyV5(item, type){
+  const name = String(item?.name || "").trim().toLowerCase();
+  const kcal = Number(item?.kcal) || 0;
+
+  if(type === "exercise"){
+    return [type, name, kcal].join("|");
+  }
+
+  const protein = Number(item?.protein) || 0;
+  const carb = Number(item?.carb ?? item?.carbs ?? item?.carbohydrate) || 0;
+  const sugar = Number(item?.sugar) || 0;
+  const fiber = Number(item?.fiber) || 0;
+
+  return [type, name, kcal, protein, carb, sugar, fiber].join("|");
+}
+
+function mergeListV5(localList, cloudList, type){
+  const out = [];
+  const seen = new Set();
+
+  [...(Array.isArray(cloudList) ? cloudList : []), ...(Array.isArray(localList) ? localList : [])].forEach(raw => {
+    const item = cloneStateV5(raw);
+
+    if(type === "food" && typeof normalizeFoodMetabolicItem === "function"){
+      try{ normalizeFoodMetabolicItem(item); }catch(err){}
+    }
+
+    const key = item.id || itemKeyV5(item, type);
+
+    if(!seen.has(key)){
+      seen.add(key);
+      out.push(item);
+    }
+  });
+
+  return out;
+}
+
+function mergeKcalDaysV5(localDays, cloudDays){
+  const local = localDays || {};
+  const cloud = cloudDays || {};
+  const dates = new Set([...Object.keys(cloud), ...Object.keys(local)]);
+  const merged = {};
+
+  dates.forEach(dateStr => {
+    const l = local[dateStr] || {};
+    const c = cloud[dateStr] || {};
+
+    const day = {
+      ...c,
+      ...l
+    };
+
+    const localBase = Number(l.baseKcal ?? l.base ?? 0) || 0;
+    const cloudBase = Number(c.baseKcal ?? c.base ?? 0) || 0;
+    day.baseKcal = localBase > 0 ? localBase : cloudBase;
+
+    day.food = mergeListV5(l.food, c.food, "food");
+    day.exercise = mergeListV5(l.exercise, c.exercise, "exercise");
+
+    merged[dateStr] = day;
+  });
+
+  return merged;
+}
+
+function mergeWeightLogsV5(localWeightLogs, cloudWeightLogs){
+  if(Array.isArray(localWeightLogs) || Array.isArray(cloudWeightLogs)){
+    const out = [];
+    const seen = new Set();
+
+    [...(Array.isArray(cloudWeightLogs) ? cloudWeightLogs : []), ...(Array.isArray(localWeightLogs) ? localWeightLogs : [])].forEach(item => {
+      const key = `${item?.date || item?.dateStr || ""}|${item?.weight || item?.value || ""}`;
+      if(!seen.has(key)){
+        seen.add(key);
+        out.push(item);
+      }
+    });
+
+    return out;
+  }
+
+  return {
+    ...(cloudWeightLogs || {}),
+    ...(localWeightLogs || {})
+  };
+}
+
+function mergeStateV5(localState, cloudState){
+  const local = cloneStateV5(localState);
+  const cloud = cloneStateV5(cloudState);
+
+  const merged = {
+    ...cloud,
+    ...local
+  };
+
+  merged.kcalDays = mergeKcalDaysV5(local.kcalDays, cloud.kcalDays);
+  merged.weightLogs = mergeWeightLogsV5(local.weightLogs, cloud.weightLogs);
+
+  if(Array.isArray(local.aiChatHistory) || Array.isArray(cloud.aiChatHistory)){
+    const seen = new Set();
+    merged.aiChatHistory = [
+      ...(Array.isArray(cloud.aiChatHistory) ? cloud.aiChatHistory : []),
+      ...(Array.isArray(local.aiChatHistory) ? local.aiChatHistory : [])
+    ].filter(item => {
+      const key = JSON.stringify(item).slice(0, 300);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(-80);
+  }
+
+  merged.__clientUpdatedAt = Date.now();
+  merged.__syncVersion = "v1.6.5";
+  merged.__syncUpdatedAt = Date.now();
+
+  return merged;
+}
+
+function replaceStateV5(nextState){
+  if(typeof state !== "object" || !state) return;
+  Object.keys(state).forEach(key => delete state[key]);
+  Object.assign(state, nextState);
+}
+
+function renderAfterSyncV5(){
+  [
+    "renderHome",
+    "renderKcalPage",
+    "renderDashboard",
+    "renderKcalInsulinInsight",
+    "renderDashboardInsulinInsight",
+    "enhanceDashboardOverviewMetabolicV1",
+    "renderEnergyAnalyticsDashboard",
+    "ensureSyncNowButtonV5"
+  ].forEach(name => {
+    try{
+      if(typeof window[name] === "function") window[name]();
+      else if(typeof globalThis[name] === "function") globalThis[name]();
+    }catch(err){}
+  });
+}
+
+async function syncNowV5(reason = "manual"){
+  if(window.__syncNowRunningV5){
+    console.log("sync already running");
+    return;
+  }
+
+  const ref = getTrackerDocRefV5();
+  if(!ref) return;
+
+  window.__syncNowRunningV5 = true;
+  setSyncStatusV5("sync: กำลังซิงก์...");
+
+  try{
+    const localSnapshot = cloneStateV5(state);
+    const snap = await getDoc(ref);
+    const cloudSnapshot = snap.exists() ? normalizeCloudV5(snap.data()) : {};
+
+    const merged = mergeStateV5(localSnapshot, cloudSnapshot);
+
+    replaceStateV5(merged);
+
+    await setDoc(ref, merged, { merge:false });
+
+    try{
+      if(typeof saveState === "function") saveState();
+    }catch(err){}
+
+    renderAfterSyncV5();
+
+    const user = getCurrentUserV5();
+    const uidShort = user && user.uid ? user.uid.slice(-6) : "-";
+    const time = new Date().toLocaleTimeString("th-TH", { hour:"2-digit", minute:"2-digit" });
+
+    setSyncStatusV5(`sync: สำเร็จ ${time} · uid ${uidShort} · ${reason}`);
+    console.log("sync success v1.6.5", { reason, uid: user?.uid, merged });
+  }catch(err){
+    console.error("sync failed v1.6.5", err);
+    setSyncStatusV5("sync: ไม่สำเร็จ ดู Console");
+  }finally{
+    setTimeout(() => {
+      window.__syncNowRunningV5 = false;
+    }, 700);
+  }
+}
+
+// Override old save/sync engines so they don't keep local-only state frozen
+try{
+  saveCloudStateNow = async function(force = false){
+    return syncNowV5(force ? "save-force" : "save");
+  };
+}catch(err){}
+
+try{
+  forceCloudSaveFreshnessV1 = async function(reason = "freshness"){
+    return syncNowV5("freshness-" + reason);
+  };
+}catch(err){}
+
+try{
+  scheduleForceCloudSaveFreshnessV1 = function(reason = "action"){
+    clearTimeout(window.__syncV5Debounce);
+    window.__syncV5Debounce = setTimeout(() => syncNowV5(reason), 1200);
+  };
+}catch(err){}
+
+function ensureSyncNowButtonV5(){
+  const dataTools = document.querySelector(".data-tools-card");
+  if(!dataTools) return;
+
+  const actions = dataTools.querySelector(".data-tool-actions") || dataTools;
+
+  let btn = document.getElementById("syncNowBtnV5") || document.getElementById("syncNowBtnV4");
+
+  if(!btn){
+    btn = document.createElement("button");
+    actions.appendChild(btn);
+  }
+
+  btn.id = "syncNowBtnV5";
+  btn.type = "button";
+  btn.className = "sync-now-btn-v4";
+  btn.textContent = "Sync Now";
+  btn.onclick = function(ev){
+    ev.preventDefault();
+    ev.stopPropagation();
+    syncNowV5("manual-button");
+  };
+
+  let status = document.getElementById("syncStatusV5") || document.getElementById("syncStatusV4");
+
+  if(!status){
+    status = document.createElement("div");
+    dataTools.appendChild(status);
+  }
+
+  status.id = "syncStatusV5";
+  status.className = "sync-status-v4";
+
+  const user = getCurrentUserV5();
+  if(user && user.uid && (!status.textContent || status.textContent.includes("ยังไม่พร้อม"))){
+    status.textContent = "sync: พร้อม · uid " + user.uid.slice(-6);
+  }else if(!status.textContent){
+    status.textContent = "sync: รอ login";
+  }
+}
+
+document.addEventListener("click", function(e){
+  const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+  if(!btn) return;
+
+  if(btn.id === "syncNowBtnV5" || btn.id === "syncNowBtnV4"){
+    e.preventDefault();
+    syncNowV5("manual-delegated");
+    return;
+  }
+
+  const id = btn.id || "";
+  const text = (btn.textContent || "").trim();
+
+  const shouldSync =
+    /add|save|reset|delete|backdate|Food|Exercise|Weight/i.test(id) ||
+    /เพิ่ม|บันทึก|ลบ|Reset|แก้ไขย้อนหลัง|×|\+/.test(text);
+
+  if(shouldSync){
+    clearTimeout(window.__autoSyncAfterActionV5);
+    window.__autoSyncAfterActionV5 = setTimeout(() => syncNowV5("after-action"), 1500);
+  }
+}, true);
+
+setTimeout(ensureSyncNowButtonV5, 500);
+setTimeout(ensureSyncNowButtonV5, 1500);
+setTimeout(() => syncNowV5("initial"), 2500);
+
+window.addEventListener("focus", function(){
+  setTimeout(() => syncNowV5("focus"), 1000);
+});
 
 </script>
 
