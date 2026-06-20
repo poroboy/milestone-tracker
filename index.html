@@ -2615,6 +2615,12 @@
 }
 
 </style>
+
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <meta name="theme-color" content="#1b2226">
+
 </head>
 <body>
 
@@ -7431,9 +7437,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.16";
-const APP_BUILD_V1 = "2026.06.21.16";
-const APP_VERSION_NOTE_V1 = "Fix streak local date shift and finalize streak recovery UI";
+const APP_VERSION_V1 = "v1.6.17";
+const APP_BUILD_V1 = "2026.06.21.17";
+const APP_VERSION_NOTE_V1 = "Clarify cloud sync wording and add PWA install support";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -9527,7 +9533,7 @@ function cloudDayV12(day, clientId){
     exercise: normalized.exercise,
     updatedAtMs: Date.now(),
     updatedBy: clientId,
-    syncVersion: "v1.6.16"
+    syncVersion: "v1.6.17"
   };
 }
 
@@ -9571,7 +9577,7 @@ function masterStateV12(source, clientId){
   delete master.aiMessages;
   delete master.messages;
   master.__cloudStorageMode = "split-per-day-v1";
-  master.__syncVersion = "v1.6.16";
+  master.__syncVersion = "v1.6.17";
   master.__syncUpdatedAt = Date.now();
   master.__clientUpdatedAt = Date.now();
   master.__updatedBy = clientId;
@@ -9750,10 +9756,10 @@ async function syncNowV12(reason = "manual"){
 
     if(permissionDenied){
       window.__syncPermissionRetryAtV13 = Date.now() + 15000;
-      console.error("sync blocked by Firestore rules v1.6.16", err);
+      console.error("sync blocked by Firestore rules v1.6.17", err);
       syncStatusV9("sync: Firestore ยังไม่อนุญาต · ลองใหม่ใน 15 วินาที");
     }else{
-      console.error("sync failed v1.6.16", err);
+      console.error("sync failed v1.6.17", err);
       syncStatusV9("sync: ไม่สำเร็จ ดู Console");
     }
   }finally{
@@ -9991,6 +9997,17 @@ onAuthStateChanged(auth, (user) => {
   }
 });
   }
+</script>
+
+
+<script id="pwaServiceWorkerRegister">
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((err) => {
+      console.warn("Service worker registration failed:", err);
+    });
+  });
+}
 </script>
 
 </body>
