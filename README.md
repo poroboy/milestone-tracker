@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.17
-- Build: 2026.06.21.17
-- Notes: Clarify cloud sync wording and add PWA install support
+- Version: v1.6.18
+- Build: 2026.06.21.18
+- Notes: Extract stylesheet into external CSS file
 
 ## Current Features
 
