@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.11
-- Build: 2026.06.20.11
-- Notes: Fix login after Firestore import cleanup
+- Version: v1.6.12
+- Build: 2026.06.21.12
+- Notes: Restore login and reliable cross-device sync
 
 ## Current Features
 
