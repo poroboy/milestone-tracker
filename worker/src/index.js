@@ -6,9 +6,17 @@ const MODEL_PRIORITY = [
 
 const ALLOWED_ORIGINS = [
   "https://poroboy.github.io",
-  "http://localhost:8787",
-  "http://127.0.0.1:8787"
+  "http://localhost:5500",
+  "http://localhost:5501",
+  "http://127.0.0.1:5500",
+  "http://127.0.0.1:5501"
 ];
+
+function getCorsOrigin(request) {
+  const origin = request.headers.get("Origin") || "";
+  return ALLOWED_ORIGINS.includes(origin) ? origin : "https://poroboy.github.io";
+}
+
 
 function corsHeaders(origin) {
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin)

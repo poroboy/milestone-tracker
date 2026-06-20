@@ -705,7 +705,7 @@ function todayStr(date = new Date()){
 }
 function daysAgoStr(n){
   const d = new Date();
-  d.setDate(d.getDate()-n);
+  d.setDate(d.getDate() - n);
   return localDateKeyV2(d);
 }
 
@@ -1634,6 +1634,58 @@ function startRealtimeClock(){
 }
 
 
+
+// AI AUTO-LOG POST-SYNC VERIFY V10
+function verifyAiAutoLogAfterSyncV10(date, expectedItems){
+  if(!date || !Array.isArray(expectedItems) || !expectedItems.length) return;
+
+  setTimeout(() => {
+    try{
+      const log = getDayLog(date);
+      let restored = false;
+
+      expectedItems.forEach(expected => {
+        const type = expected.type || expected.category;
+        if(type === "food"){
+          const exists = (log.food || []).some(x =>
+            String(x.name || "").trim().toLowerCase() === String(expected.name || "").trim().toLowerCase()
+            && Number(x.kcal || 0) === Number(expected.kcal || 0)
+            && Number(x.protein || 0) === Number(expected.protein || 0)
+          );
+
+          if(!exists){
+            if(!Array.isArray(log.food)) log.food = [];
+            log.food.push(expected);
+            restored = true;
+          }
+        }
+
+        if(type === "exercise"){
+          const exists = (log.exercise || []).some(x =>
+            String(x.name || "").trim().toLowerCase() === String(expected.name || "").trim().toLowerCase()
+            && Number(x.kcal || 0) === Number(expected.kcal || 0)
+          );
+
+          if(!exists){
+            if(!Array.isArray(log.exercise)) log.exercise = [];
+            log.exercise.push(expected);
+            restored = true;
+          }
+        }
+      });
+
+      if(restored){
+        console.log("AI auto-log restored after sync merge v1.6.25", { date, expectedItems });
+        saveState();
+        renderKcalPage();
+        try{ if(typeof renderDashboard === "function") renderDashboard(); }catch(err){}
+      }
+    }catch(err){
+      console.warn("AI auto-log post-sync verify failed", err);
+    }
+  }, 2200);
+}
+
 async function handleAiKcalMessage() {
   const input = document.getElementById("aiKcalMessage");
   const reply = document.getElementById("aiKcalReply");
@@ -1658,7 +1710,7 @@ async function handleAiKcalMessage() {
   saveState();
 
   try {
-    const today = todayStr();
+    const today = localDateKeyV2(new Date());
     const log = getDayLog(today);
     const totals = dayTotals(today);
 
@@ -1695,6 +1747,7 @@ async function handleAiKcalMessage() {
     }
 
     let addedText = [];
+    const aiExpectedItemsV10 = [];
 
     if (Array.isArray(data.items)) {
       data.items.forEach(item => {
@@ -1705,18 +1758,57 @@ async function handleAiKcalMessage() {
           ? `${item.name} (${item.note})`
           : item.name;
 
-        if (item.category === "food") {
+        const category = String(item.category || item.type || "").toLowerCase();
+
+        if (category === "food") {
           const protein = Math.round(Number(item.protein) || 0);
-          log.food.push({ name: label, kcal, protein });
+          const carb = Math.round(Number(item.carb || item.carbs || 0));
+          const sugar = Math.round(Number(item.sugar || 0));
+          const fiber = Math.round(Number(item.fiber || 0));
+          const spikeRisk = item.spikeRisk || item.glucoseSpikeRisk || "ต่ำ";
+
+          const foodEntry = {
+            type: "food",
+            name: label,
+            kcal,
+            protein,
+            carb,
+            sugar,
+            fiber,
+            spikeRisk,
+            source: "ai",
+            createdAt: Date.now()
+          };
+
+          log.food.push(foodEntry);
+          aiExpectedItemsV10.push(foodEntry);
+
           addedText.push(`+${kcal} kcal / ${protein}g protein ${item.name}`);
         }
 
-        if (item.category === "exercise") {
-          log.exercise.push({ name: label, kcal });
+        if (category === "exercise") {
+          const exerciseEntry = {
+            type: "exercise",
+            name: label,
+            kcal,
+            source: "ai",
+            createdAt: Date.now()
+          };
+
+          log.exercise.push(exerciseEntry);
+          aiExpectedItemsV10.push(exerciseEntry);
+
           addedText.push(`-${kcal} kcal ${item.name}`);
         }
       });
     }
+
+    console.log("AI auto-log direct write", {
+      date: today,
+      addedText,
+      foodCount: log.food?.length || 0,
+      exerciseCount: log.exercise?.length || 0
+    });
 
     state.aiChatHistory.push({
       role: "ai",
@@ -1734,6 +1826,7 @@ async function handleAiKcalMessage() {
 
     saveState();
     renderKcalPage();
+    verifyAiAutoLogAfterSyncV10(today, aiExpectedItemsV10);
   } catch (err) {
     console.error(err);
 
@@ -4827,9 +4920,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.18";
-const APP_BUILD_V1 = "2026.06.21.18";
-const APP_VERSION_NOTE_V1 = "Extract stylesheet into external CSS file";
+const APP_VERSION_V1 = "v1.6.25";
+const APP_BUILD_V1 = "2026.06.21.25";
+const APP_VERSION_NOTE_V1 = "Preserve local AI kcal entries during cloud sync merge";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -5312,29 +5405,63 @@ function mergeListCloudUnionV4(localList, cloudList, type){
 }
 
 function mergeKcalDaysCloudUnionV4(localDays, cloudDays){
+  const clone = (value) => {
+    try{ return JSON.parse(JSON.stringify(value || {})); }
+    catch(err){ return value || {}; }
+  };
+
+  const normalizeDay = (day) => {
+    const d = clone(day || {});
+    if(!Array.isArray(d.food)) d.food = [];
+    if(!Array.isArray(d.exercise)) d.exercise = [];
+    if(d.base == null || Number.isNaN(Number(d.base))) d.base = 0;
+    return d;
+  };
+
+  const itemKey = (item, type) => {
+    const name = String(item?.name || "").trim().toLowerCase();
+    const kcal = Number(item?.kcal || 0);
+    const protein = Number(item?.protein || 0);
+    const carb = Number(item?.carb || item?.carbs || 0);
+    const sugar = Number(item?.sugar || 0);
+    const fiber = Number(item?.fiber || 0);
+    const minutes = Number(item?.minutes || 0);
+    return [type, name, kcal, protein, carb, sugar, fiber, minutes].join("|");
+  };
+
+  const mergeItems = (cloudItems, localItems, type) => {
+    const out = [];
+    const seen = new Set();
+
+    [...(Array.isArray(cloudItems) ? cloudItems : []), ...(Array.isArray(localItems) ? localItems : [])].forEach(item => {
+      if(!item) return;
+      const key = itemKey(item, type);
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push(clone(item));
+    });
+
+    return out;
+  };
+
+  const merged = {};
   const local = localDays || {};
   const cloud = cloudDays || {};
-  const allDates = new Set([...Object.keys(cloud), ...Object.keys(local)]);
-  const merged = {};
+  const dates = new Set([...Object.keys(cloud), ...Object.keys(local)]);
 
-  allDates.forEach(dateStr => {
-    const l = local[dateStr] || {};
-    const c = cloud[dateStr] || {};
+  dates.forEach(date => {
+    const c = normalizeDay(cloud[date]);
+    const l = normalizeDay(local[date]);
 
-    const day = {
+    merged[date] = {
       ...c,
-      ...l
+      ...l,
+      // Local base should win when user just changed it.
+      base: l.base || c.base || 0,
+      // Keep both cloud and local log items. Local AI/manual items must not be erased by stale cloud.
+      food: mergeItems(c.food, l.food, "food"),
+      exercise: mergeItems(c.exercise, l.exercise, "exercise")
     };
-
-    const localBase = Number(l.baseKcal ?? l.base ?? 0) || 0;
-    const cloudBase = Number(c.baseKcal ?? c.base ?? 0) || 0;
-
-    day.baseKcal = localBase > 0 ? localBase : cloudBase;
-
-    day.food = mergeListCloudUnionV4(l.food, c.food, "food");
-    day.exercise = mergeListCloudUnionV4(l.exercise, c.exercise, "exercise");
-
-    merged[dateStr] = day;
   });
 
   return merged;
@@ -5396,7 +5523,7 @@ function mergeStateCloudUnionV4(localState, cloudState){
   );
 
   merged.__syncClientId = getCloudUnionClientIdV4();
-  merged.__syncVersion = "v1.6.4";
+  merged.__syncVersion = "v1.6.25";
   merged.__syncUpdatedAt = Date.now();
 
   return merged;
@@ -5559,6 +5686,209 @@ setTimeout(() => syncNowCloudUnionV4("initial"), 2500);
 setInterval(() => syncNowCloudUnionV4("interval"), 30000);
 
 
+
+// CLOUD-FIRST SIGNED-IN SYNC V6
+window.cloudFirstSignedInSyncV6 = true;
+
+function getActiveUserCloudFirstV6(){
+  try{
+    if(typeof auth !== "undefined" && auth?.currentUser) return auth.currentUser;
+  }catch(err){}
+  try{
+    if(window.auth?.currentUser) return window.auth.currentUser;
+  }catch(err){}
+  return null;
+}
+
+function cloneForCloudFirstV6(value){
+  try{
+    return JSON.parse(JSON.stringify(value || {}));
+  }catch(err){
+    console.warn("cloud-first clone failed", err);
+    return {};
+  }
+}
+
+function getLocalCacheKeyCloudFirstV6(){
+  try{
+    if(typeof STORAGE_KEY !== "undefined") return STORAGE_KEY;
+  }catch(err){}
+  return "milestone-tracker-state";
+}
+
+function markCloudFirstStatusV6(text){
+  try{
+    if(typeof setSyncStatusV5 === "function"){
+      setSyncStatusV5(text);
+      return;
+    }
+  }catch(err){}
+  try{
+    if(typeof setSyncStatusCloudUnionV4 === "function"){
+      setSyncStatusCloudUnionV4(text);
+    }
+  }catch(err){}
+}
+
+function saveCloudStateToLocalCacheV6(reason = "cloud-cache"){
+  try{
+    const key = getLocalCacheKeyCloudFirstV6();
+    const user = getActiveUserCloudFirstV6();
+    const cache = cloneForCloudFirstV6(state);
+    cache.__localCacheOnly = true;
+    cache.__localCacheReason = reason;
+    cache.__localCacheUpdatedAt = Date.now();
+    cache.__localCacheUid = user?.uid || null;
+    cache.__syncSource = "cloud-first-v6";
+    localStorage.setItem(key, JSON.stringify(cache));
+  }catch(err){
+    console.warn("cloud-first local cache save failed", err);
+  }
+}
+
+function hasMeaningfulCloudStateV6(cloud){
+  if(!cloud || typeof cloud !== "object") return false;
+
+  const hasKcal = cloud.kcalDays && typeof cloud.kcalDays === "object" && Object.keys(cloud.kcalDays).length > 0;
+  const hasWeightArray = Array.isArray(cloud.weightLogs) && cloud.weightLogs.length > 0;
+  const hasWeightObj = cloud.weightLogs && typeof cloud.weightLogs === "object" && !Array.isArray(cloud.weightLogs) && Object.keys(cloud.weightLogs).length > 0;
+  const hasCheckin = Array.isArray(cloud.checkinDates) && cloud.checkinDates.length > 0;
+  const hasChat = Array.isArray(cloud.aiChatHistory) && cloud.aiChatHistory.length > 0;
+
+  return hasKcal || hasWeightArray || hasWeightObj || hasCheckin || hasChat || !!cloud.__syncUpdatedAt;
+}
+
+function mergeCollectionsCloudFirstV6(cloud, local){
+  const merged = {
+    ...cloneForCloudFirstV6(cloud || {})
+  };
+
+  // Keep cloud as primary for scalar/profile fields.
+  // Union only append-style collections so offline/new local logs are not lost.
+  try{
+    if(typeof mergeKcalDaysV5 === "function"){
+      merged.kcalDays = mergeKcalDaysV5(local?.kcalDays || {}, cloud?.kcalDays || {});
+    }else if(typeof mergeKcalDaysCloudUnionV4 === "function"){
+      merged.kcalDays = mergeKcalDaysCloudUnionV4(local?.kcalDays || {}, cloud?.kcalDays || {});
+    }
+  }catch(err){
+    console.warn("cloud-first kcal merge skipped", err);
+  }
+
+  try{
+    if(typeof mergeWeightLogsV5 === "function"){
+      merged.weightLogs = mergeWeightLogsV5(local?.weightLogs || [], cloud?.weightLogs || []);
+    }else if(typeof mergeWeightLogsCloudUnionV4 === "function"){
+      merged.weightLogs = mergeWeightLogsCloudUnionV4(local?.weightLogs || [], cloud?.weightLogs || []);
+    }
+  }catch(err){
+    console.warn("cloud-first weight merge skipped", err);
+  }
+
+  // checkinDates are user-editable now. Use union to avoid losing recovered fire dates.
+  try{
+    const checkins = new Set([
+      ...((cloud && Array.isArray(cloud.checkinDates)) ? cloud.checkinDates : []),
+      ...((local && Array.isArray(local.checkinDates)) ? local.checkinDates : [])
+    ]);
+    merged.checkinDates = Array.from(checkins).sort();
+  }catch(err){}
+
+  merged.__syncVersion = "v1.6.25";
+  merged.__syncSource = "cloud-first-v6";
+  merged.__syncUpdatedAt = Date.now();
+
+  return merged;
+}
+
+if(typeof loadCloudState === "function" && !window.__loadCloudStateCloudFirstWrappedV6){
+  window.__loadCloudStateCloudFirstWrappedV6 = true;
+  const originalLoadCloudStateV6 = loadCloudState;
+
+  loadCloudState = async function(user, ...args){
+    markCloudFirstStatusV6("sync: กำลังโหลดข้อมูลจาก Cloud...");
+
+    const localBeforeCloud = cloneForCloudFirstV6(state);
+    const result = await originalLoadCloudStateV6.call(this, user, ...args);
+
+    try{
+      if(user && typeof db !== "undefined" && typeof doc !== "undefined" && typeof getDoc !== "undefined"){
+        const ref = doc(db, "users", user.uid);
+        const snap = await getDoc(ref);
+
+        if(snap.exists()){
+          const cloud = snap.data() || {};
+
+          if(hasMeaningfulCloudStateV6(cloud)){
+            const merged = mergeCollectionsCloudFirstV6(cloud, localBeforeCloud);
+
+            Object.assign(state, merged);
+
+            saveCloudStateToLocalCacheV6("after-cloud-load");
+
+            if(typeof render === "function") render();
+            if(typeof renderKcalPage === "function") renderKcalPage();
+            if(typeof renderDashboard === "function") renderDashboard();
+
+            markCloudFirstStatusV6("sync: ใช้ข้อมูล Cloud เป็นหลักแล้ว");
+          }else{
+            markCloudFirstStatusV6("sync: Cloud ยังไม่มีข้อมูล ใช้ข้อมูลในเครื่องเป็นจุดเริ่มต้น");
+          }
+        }
+      }
+    }catch(err){
+      console.warn("cloud-first load refinement skipped", err);
+      markCloudFirstStatusV6("sync: โหลด Cloud ไม่ครบ ใช้ cache ในเครื่องชั่วคราว");
+    }
+
+    return result;
+  };
+}
+
+if(typeof saveState === "function" && !window.__saveStateCloudFirstCacheWrappedV6){
+  window.__saveStateCloudFirstCacheWrappedV6 = true;
+  const originalSaveStateCloudFirstV6 = saveState;
+
+  saveState = function(...args){
+    const output = originalSaveStateCloudFirstV6.apply(this, args);
+
+    try{
+      const user = getActiveUserCloudFirstV6();
+
+      if(user){
+        saveCloudStateToLocalCacheV6("signed-in-save-cache");
+
+        // Push to cloud after local cache save.
+        setTimeout(() => {
+          try{
+            if(typeof syncNowV5 === "function") syncNowV5("cloud-first-save");
+            else if(typeof syncNowCloudUnionV4 === "function") syncNowCloudUnionV4("cloud-first-save");
+            else if(typeof saveCloudStateNow === "function") saveCloudStateNow(true);
+          }catch(err){
+            console.warn("cloud-first cloud save skipped", err);
+          }
+        }, 500);
+      }
+    }catch(err){
+      console.warn("cloud-first save wrapper failed", err);
+    }
+
+    return output;
+  };
+}
+
+setTimeout(() => {
+  try{
+    const user = getActiveUserCloudFirstV6();
+    if(user && typeof syncNowV5 === "function"){
+      markCloudFirstStatusV6("sync: ตรวจข้อมูล Cloud หลังเข้าสู่ระบบ...");
+      syncNowV5("cloud-first-boot");
+    }
+  }catch(err){
+    console.warn("cloud-first boot sync skipped", err);
+  }
+}, 1800);
+
 window.reliableSyncNowV5 = true;
 
 function setSyncStatusV5(text){
@@ -5662,28 +5992,63 @@ function mergeListV5(localList, cloudList, type){
 }
 
 function mergeKcalDaysV5(localDays, cloudDays){
+  const clone = (value) => {
+    try{ return JSON.parse(JSON.stringify(value || {})); }
+    catch(err){ return value || {}; }
+  };
+
+  const normalizeDay = (day) => {
+    const d = clone(day || {});
+    if(!Array.isArray(d.food)) d.food = [];
+    if(!Array.isArray(d.exercise)) d.exercise = [];
+    if(d.base == null || Number.isNaN(Number(d.base))) d.base = 0;
+    return d;
+  };
+
+  const itemKey = (item, type) => {
+    const name = String(item?.name || "").trim().toLowerCase();
+    const kcal = Number(item?.kcal || 0);
+    const protein = Number(item?.protein || 0);
+    const carb = Number(item?.carb || item?.carbs || 0);
+    const sugar = Number(item?.sugar || 0);
+    const fiber = Number(item?.fiber || 0);
+    const minutes = Number(item?.minutes || 0);
+    return [type, name, kcal, protein, carb, sugar, fiber, minutes].join("|");
+  };
+
+  const mergeItems = (cloudItems, localItems, type) => {
+    const out = [];
+    const seen = new Set();
+
+    [...(Array.isArray(cloudItems) ? cloudItems : []), ...(Array.isArray(localItems) ? localItems : [])].forEach(item => {
+      if(!item) return;
+      const key = itemKey(item, type);
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push(clone(item));
+    });
+
+    return out;
+  };
+
+  const merged = {};
   const local = localDays || {};
   const cloud = cloudDays || {};
   const dates = new Set([...Object.keys(cloud), ...Object.keys(local)]);
-  const merged = {};
 
-  dates.forEach(dateStr => {
-    const l = local[dateStr] || {};
-    const c = cloud[dateStr] || {};
+  dates.forEach(date => {
+    const c = normalizeDay(cloud[date]);
+    const l = normalizeDay(local[date]);
 
-    const day = {
+    merged[date] = {
       ...c,
-      ...l
+      ...l,
+      // Local base should win when user just changed it.
+      base: l.base || c.base || 0,
+      // Keep both cloud and local log items. Local AI/manual items must not be erased by stale cloud.
+      food: mergeItems(c.food, l.food, "food"),
+      exercise: mergeItems(c.exercise, l.exercise, "exercise")
     };
-
-    const localBase = Number(l.baseKcal ?? l.base ?? 0) || 0;
-    const cloudBase = Number(c.baseKcal ?? c.base ?? 0) || 0;
-    day.baseKcal = localBase > 0 ? localBase : cloudBase;
-
-    day.food = mergeListV5(l.food, c.food, "food");
-    day.exercise = mergeListV5(l.exercise, c.exercise, "exercise");
-
-    merged[dateStr] = day;
   });
 
   return merged;
@@ -5737,7 +6102,7 @@ function mergeStateV5(localState, cloudState){
   }
 
   merged.__clientUpdatedAt = Date.now();
-  merged.__syncVersion = "v1.6.5";
+  merged.__syncVersion = "v1.6.25";
   merged.__syncUpdatedAt = Date.now();
 
   return merged;
@@ -5801,9 +6166,9 @@ async function syncNowV5(reason = "manual"){
     const time = new Date().toLocaleTimeString("th-TH", { hour:"2-digit", minute:"2-digit" });
 
     setSyncStatusV5(`sync: สำเร็จ ${time} · uid ${uidShort} · ${reason}`);
-    console.log("sync success v1.6.5", { reason, uid: user?.uid, merged });
+    console.log("sync success v1.6.25", { reason, uid: user?.uid, merged });
   }catch(err){
-    console.error("sync failed v1.6.5", err);
+    console.error("sync failed v1.6.25", err);
     setSyncStatusV5("sync: ไม่สำเร็จ ดู Console");
   }finally{
     setTimeout(() => {
@@ -6147,7 +6512,7 @@ function mergeStateV8(localState, cloudState){
 
   merged.__clientUpdatedAt = Date.now();
   merged.__syncUpdatedAt = Date.now();
-  merged.__syncVersion = "v1.6.8";
+  merged.__syncVersion = "v1.6.25";
 
   return merged;
 }
@@ -6224,9 +6589,9 @@ async function syncNowV8(reason = "manual"){
     });
 
     syncStatusV8(`sync: สำเร็จ ${time} · uid ${user.uid.slice(-6)} · ${reason}`);
-    console.log("sync success v1.6.8", { reason, uid:user.uid, merged });
+    console.log("sync success v1.6.25", { reason, uid:user.uid, merged });
   }catch(err){
-    console.error("sync failed v1.6.8", err);
+    console.error("sync failed v1.6.25", err);
     syncStatusV8("sync: ไม่สำเร็จ ดู Console");
   }finally{
     setTimeout(() => {
@@ -6525,7 +6890,7 @@ function buildMasterStateV9(sourceState){
   delete master.messages;
 
   master.__cloudStorageMode = "split-per-day-v1";
-  master.__syncVersion = "v1.6.9";
+  master.__syncVersion = "v1.6.25";
   master.__syncUpdatedAt = Date.now();
   master.__clientUpdatedAt = Date.now();
 
@@ -6556,7 +6921,7 @@ function mergeMasterStateV9(localMaster, cloudMaster){
   });
 
   merged.__cloudStorageMode = "split-per-day-v1";
-  merged.__syncVersion = "v1.6.9";
+  merged.__syncVersion = "v1.6.25";
   merged.__syncUpdatedAt = Date.now();
   merged.__clientUpdatedAt = Date.now();
 
@@ -6684,9 +7049,9 @@ async function syncNowV9(reason = "manual"){
     });
 
     syncStatusV9(`sync: สำเร็จ ${time} · uid ${refs.user.uid.slice(-6)} · ${reason}`);
-    console.log("sync success v1.6.9", { reason, uid:refs.user.uid, days:Object.keys(mergedDays).length });
+    console.log("sync success v1.6.25", { reason, uid:refs.user.uid, days:Object.keys(mergedDays).length });
   }catch(err){
-    console.error("sync failed v1.6.9", err);
+    console.error("sync failed v1.6.25", err);
     syncStatusV9("sync: ไม่สำเร็จ ดู Console");
   }finally{
     setTimeout(() => {
@@ -6838,7 +7203,7 @@ try{
     });
   }
 
-  console.log("Firestore bridge ready v1.6.10", {
+  console.log("Firestore bridge ready v1.6.25", {
     db: !!window.__mtFirebase.db,
     doc: typeof window.__mtFirebase.doc,
     getDoc: typeof window.__mtFirebase.getDoc,
@@ -6847,7 +7212,7 @@ try{
     getDocs: typeof window.__mtFirebase.getDocs
   });
 }catch(err){
-  console.warn("Firestore bridge v1.6.10 failed", err);
+  console.warn("Firestore bridge v1.6.25 failed", err);
 }
 
 setTimeout(() => {
@@ -6923,7 +7288,7 @@ function cloudDayV12(day, clientId){
     exercise: normalized.exercise,
     updatedAtMs: Date.now(),
     updatedBy: clientId,
-    syncVersion: "v1.6.18"
+    syncVersion: "v1.6.25"
   };
 }
 
@@ -6967,7 +7332,7 @@ function masterStateV12(source, clientId){
   delete master.aiMessages;
   delete master.messages;
   master.__cloudStorageMode = "split-per-day-v1";
-  master.__syncVersion = "v1.6.18";
+  master.__syncVersion = "v1.6.25";
   master.__syncUpdatedAt = Date.now();
   master.__clientUpdatedAt = Date.now();
   master.__updatedBy = clientId;
@@ -7146,10 +7511,10 @@ async function syncNowV12(reason = "manual"){
 
     if(permissionDenied){
       window.__syncPermissionRetryAtV13 = Date.now() + 15000;
-      console.error("sync blocked by Firestore rules v1.6.18", err);
+      console.error("sync blocked by Firestore rules v1.6.25", err);
       syncStatusV9("sync: Firestore ยังไม่อนุญาต · ลองใหม่ใน 15 วินาที");
     }else{
-      console.error("sync failed v1.6.18", err);
+      console.error("sync failed v1.6.25", err);
       syncStatusV9("sync: ไม่สำเร็จ ดู Console");
     }
   }finally{
@@ -7271,7 +7636,7 @@ try{
     });
   }
 
-  console.log("Firebase login bridge ready v1.6.11", {
+  console.log("Firebase login bridge ready v1.6.25", {
     db: !!window.__mtFirebase.db,
     doc: typeof window.__mtFirebase.doc,
     getDoc: typeof window.__mtFirebase.getDoc,
@@ -7280,7 +7645,7 @@ try{
     getDocs: typeof window.__mtFirebase.getDocs
   });
 }catch(err){
-  console.warn("Firebase login bridge v1.6.11 failed", err);
+  console.warn("Firebase login bridge v1.6.25 failed", err);
 }
 window.firebaseDb = db;
     window.firebaseFirestore = {
@@ -7388,6 +7753,12 @@ onAuthStateChanged(auth, (user) => {
 });
   }
 </script>
+
+
+
+
+
+
 
 
 <script id="pwaServiceWorkerRegister">
