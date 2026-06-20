@@ -2375,6 +2375,53 @@
     }
   }
 
+
+  /* appVersionBadgeV1 */
+  .app-version-badge{
+    width:calc(100% - 32px);
+    max-width:520px;
+    margin:8px auto 14px;
+    padding:10px 12px;
+    border:1px solid #e8ddcc;
+    border-radius:14px;
+    background:#fffdf8;
+    box-sizing:border-box;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .app-version-badge .version-main{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  .app-version-badge .version-label{
+    font-size:10px;
+    color:var(--muted);
+  }
+  .app-version-badge .version-number{
+    font-family:'DM Mono',monospace;
+    font-size:13px;
+    font-weight:900;
+    color:var(--ink);
+  }
+  .app-version-badge .version-build{
+    font-family:'DM Mono',monospace;
+    font-size:10px;
+    color:var(--muted);
+    text-align:right;
+    white-space:nowrap;
+  }
+  @media(max-width:430px){
+    .app-version-badge{
+      width:calc(100% - 24px);
+      margin-top:6px;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -7027,6 +7074,73 @@ document.addEventListener("visibilitychange", function(){
   if(document.visibilityState === "hidden"){
     forceCloudSaveFreshnessV1("visibility-hidden");
   }
+});
+
+
+const APP_VERSION_V1 = "v1.6.0";
+const APP_BUILD_V1 = "2026.06.19.01";
+const APP_VERSION_NOTE_V1 = "Backdate editor + save freshness guard + metabolic insight";
+
+function findHomePageForVersionBadgeV1(){
+  const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
+
+  for(const id of directIds){
+    const el = document.getElementById(id);
+    if(el) return el;
+  }
+
+  const pages = Array.from(document.querySelectorAll(".page"));
+  const home = pages.find(page => {
+    const text = page.textContent || "";
+    return text.includes("น้ำหนักปัจจุบัน") ||
+           text.includes("เป้าหมาย") ||
+           text.includes("Milestone") ||
+           text.includes("หน้าหลัก");
+  });
+
+  return home || document.querySelector(".page.active") || document.body;
+}
+
+function ensureAppVersionBadgeV1(){
+  const home = findHomePageForVersionBadgeV1();
+  if(!home) return;
+
+  let badge = document.getElementById("appVersionBadgeV1");
+
+  if(!badge){
+    badge = document.createElement("div");
+    badge.id = "appVersionBadgeV1";
+    badge.className = "app-version-badge";
+    badge.innerHTML = `
+      <div class="version-main">
+        <div class="version-label">App version</div>
+        <div class="version-number">${APP_VERSION_V1}</div>
+      </div>
+      <div class="version-build">
+        build ${APP_BUILD_V1}<br>
+        ${APP_VERSION_NOTE_V1}
+      </div>
+    `;
+  }
+
+  if(!home.contains(badge)){
+    const header = home.querySelector("header");
+    if(header){
+      header.insertAdjacentElement("afterend", badge);
+    }else{
+      home.prepend(badge);
+    }
+  }
+}
+
+setTimeout(ensureAppVersionBadgeV1, 300);
+setTimeout(ensureAppVersionBadgeV1, 1200);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(ensureAppVersionBadgeV1, 300);
 });
 
 </script>

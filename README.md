@@ -4,6 +4,14 @@ Personal health and milestone tracking web app with cloud sync, kcal/protein log
 
 Live app: https://poroboy.github.io/milestone-tracker/
 
+## Current App Version
+
+Current app version shown in the home page:
+
+- Version: v1.6.0
+- Build: 2026.06.19.01
+- Notes: Backdate editor, save freshness guard, metabolic insight
+
 ## Current Features
 
 ### Account & Cloud Sync
