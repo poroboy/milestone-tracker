@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.8";
-const APP_BUILD_V1 = "2026.06.20.08";
-const APP_VERSION_NOTE_V1 = "Firebase bridge and single Sync Now";
+const APP_VERSION_V1 = "v1.6.9";
+const APP_BUILD_V1 = "2026.06.20.09";
+const APP_VERSION_NOTE_V1 = "Split per-day Firestore sync";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -8580,6 +8580,470 @@ window.addEventListener("focus", function(){
   setTimeout(() => syncNowV8("focus"), 1200);
 });
 
+
+// firebaseBridgeSplitDayV9
+try{
+  if(window.__mtFirebase){
+    window.__mtFirebase.collection = collection;
+    window.__mtFirebase.getDocs = getDocs;
+    window.__mtFirebase.getDoc = getDoc;
+    window.__mtFirebase.setDoc = setDoc;
+    window.__mtFirebase.doc = doc;
+    window.__mtFirebase.db = db;
+    window.__mtFirebase.auth = auth;
+  }
+
+  window.collection = collection;
+  window.getDocs = getDocs;
+  window.getDoc = getDoc;
+  window.setDoc = setDoc;
+  window.doc = doc;
+  window.db = db;
+  window.auth = auth;
+  window.firebaseBridgeSplitDayV9 = true;
+}catch(err){
+  console.warn("firebase split-day bridge failed", err);
+}
+
+
+window.splitDayCloudSyncV9 = true;
+
+function syncStatusV9(text){
+  const el =
+    document.getElementById("syncStatusV9") ||
+    document.getElementById("syncStatusV8") ||
+    document.getElementById("syncStatusV5") ||
+    document.getElementById("syncStatusV4");
+
+  if(el) el.textContent = text;
+  console.log(text);
+}
+
+function fbV9(){
+  return window.__mtFirebase || {
+    auth: window.auth,
+    db: window.db,
+    doc: window.doc,
+    getDoc: window.getDoc,
+    setDoc: window.setDoc,
+    collection: window.collection,
+    getDocs: window.getDocs
+  };
+}
+
+function userV9(){
+  const fb = fbV9();
+
+  return (
+    window.currentUser ||
+    fb?.auth?.currentUser ||
+    window.auth?.currentUser ||
+    null
+  );
+}
+
+function cloneV9(obj){
+  try{
+    return JSON.parse(JSON.stringify(obj || {}));
+  }catch(err){
+    return {};
+  }
+}
+
+function normalizeCloudDocV9(data){
+  if(!data || typeof data !== "object") return {};
+  if(data.state && typeof data.state === "object") return data.state;
+  if(data.data && typeof data.data === "object") return data.data;
+  return data;
+}
+
+function itemKeyV9(item, type){
+  const name = String(item?.name || "").trim().toLowerCase();
+  const kcal = Number(item?.kcal) || 0;
+
+  if(type === "exercise"){
+    return [type, name, kcal].join("|");
+  }
+
+  const protein = Number(item?.protein) || 0;
+  const carb = Number(item?.carb ?? item?.carbs ?? item?.carbohydrate) || 0;
+  const sugar = Number(item?.sugar) || 0;
+  const fiber = Number(item?.fiber) || 0;
+
+  return [type, name, kcal, protein, carb, sugar, fiber].join("|");
+}
+
+function sanitizeFoodV9(raw){
+  const item = cloneV9(raw);
+
+  item.name = String(item.name || "").slice(0, 160);
+  item.kcal = Number(item.kcal) || 0;
+  item.protein = Number(item.protein) || 0;
+  item.carb = Number(item.carb ?? item.carbs ?? item.carbohydrate) || 0;
+  item.sugar = Number(item.sugar) || 0;
+  item.fiber = Number(item.fiber) || 0;
+
+  if(typeof normalizeFoodMetabolicItem === "function"){
+    try{ normalizeFoodMetabolicItem(item); }catch(err){}
+  }
+
+  return {
+    id: item.id || undefined,
+    name: item.name,
+    kcal: item.kcal,
+    protein: item.protein,
+    carb: item.carb,
+    sugar: item.sugar,
+    fiber: item.fiber,
+    spikeRisk: item.spikeRisk || item.glucoseSpikeRisk || undefined
+  };
+}
+
+function sanitizeExerciseV9(raw){
+  const item = cloneV9(raw);
+
+  return {
+    id: item.id || undefined,
+    name: String(item.name || "").slice(0, 160),
+    kcal: Number(item.kcal) || 0
+  };
+}
+
+function sanitizeDayV9(day){
+  const d = day || {};
+
+  return {
+    baseKcal: Number(d.baseKcal ?? d.base ?? 0) || 0,
+    food: Array.isArray(d.food) ? d.food.map(sanitizeFoodV9) : [],
+    exercise: Array.isArray(d.exercise) ? d.exercise.map(sanitizeExerciseV9) : []
+  };
+}
+
+function mergeListV9(localList, cloudList, type){
+  const out = [];
+  const seen = new Set();
+
+  [...(Array.isArray(cloudList) ? cloudList : []), ...(Array.isArray(localList) ? localList : [])].forEach(raw => {
+    const item = type === "food" ? sanitizeFoodV9(raw) : sanitizeExerciseV9(raw);
+    const key = item.id || itemKeyV9(item, type);
+
+    if(!seen.has(key)){
+      seen.add(key);
+      out.push(item);
+    }
+  });
+
+  return out;
+}
+
+function mergeDayV9(localDay, cloudDay){
+  const l = sanitizeDayV9(localDay);
+  const c = sanitizeDayV9(cloudDay);
+
+  const baseKcal = l.baseKcal > 0 ? l.baseKcal : c.baseKcal;
+
+  return {
+    baseKcal,
+    food: mergeListV9(l.food, c.food, "food"),
+    exercise: mergeListV9(l.exercise, c.exercise, "exercise")
+  };
+}
+
+function mergeDaysV9(localDays, cloudDays){
+  const local = localDays || {};
+  const cloud = cloudDays || {};
+  const dates = new Set([...Object.keys(cloud), ...Object.keys(local)]);
+  const merged = {};
+
+  dates.forEach(dateStr => {
+    merged[dateStr] = mergeDayV9(local[dateStr], cloud[dateStr]);
+  });
+
+  return merged;
+}
+
+function buildMasterStateV9(sourceState){
+  const master = cloneV9(sourceState);
+
+  // สำคัญ: ไม่เก็บ kcalDays / AI chat ใน master doc แล้ว เพราะทำให้ doc เกิน 1MB
+  delete master.kcalDays;
+  delete master.aiChatHistory;
+  delete master.chatHistory;
+  delete master.aiMessages;
+  delete master.messages;
+
+  master.__cloudStorageMode = "split-per-day-v1";
+  master.__syncVersion = "v1.6.9";
+  master.__syncUpdatedAt = Date.now();
+  master.__clientUpdatedAt = Date.now();
+
+  return master;
+}
+
+function mergeMasterStateV9(localMaster, cloudMaster){
+  const local = cloneV9(localMaster);
+  const cloud = cloneV9(cloudMaster);
+
+  delete local.kcalDays;
+  delete cloud.kcalDays;
+
+  const merged = {
+    ...cloud,
+    ...local
+  };
+
+  // กันหน้าไฟ / streak กลายเป็น 0 ถ้าอีกเครื่องมีค่ามากกว่า
+  Object.keys({...cloud, ...local}).forEach(key => {
+    const lower = key.toLowerCase();
+
+    if(lower.includes("streak") || lower.includes("flame") || lower.includes("fire")){
+      const lv = Number(local[key]) || 0;
+      const cv = Number(cloud[key]) || 0;
+      merged[key] = Math.max(lv, cv);
+    }
+  });
+
+  merged.__cloudStorageMode = "split-per-day-v1";
+  merged.__syncVersion = "v1.6.9";
+  merged.__syncUpdatedAt = Date.now();
+  merged.__clientUpdatedAt = Date.now();
+
+  return merged;
+}
+
+function replaceStateV9(nextState){
+  if(typeof state !== "object" || !state) return;
+
+  Object.keys(state).forEach(key => delete state[key]);
+  Object.assign(state, nextState);
+}
+
+function renderAfterSyncV9(){
+  [
+    "renderHome",
+    "renderKcalPage",
+    "renderDashboard",
+    "renderKcalInsulinInsight",
+    "renderDashboardInsulinInsight",
+    "enhanceDashboardOverviewMetabolicV1",
+    "renderEnergyAnalyticsDashboard"
+  ].forEach(name => {
+    try{
+      if(typeof window[name] === "function") window[name]();
+      else if(typeof globalThis[name] === "function") globalThis[name]();
+    }catch(err){}
+  });
+
+  setTimeout(ensureSingleSyncButtonV9, 200);
+}
+
+function getRefsV9(){
+  const fb = fbV9();
+  const user = userV9();
+
+  const missing = [];
+
+  if(!user?.uid) missing.push("user");
+  if(!fb?.db) missing.push("db");
+  if(typeof fb?.doc !== "function") missing.push("doc");
+  if(typeof fb?.getDoc !== "function") missing.push("getDoc");
+  if(typeof fb?.setDoc !== "function") missing.push("setDoc");
+  if(typeof fb?.collection !== "function") missing.push("collection");
+  if(typeof fb?.getDocs !== "function") missing.push("getDocs");
+
+  if(missing.length){
+    syncStatusV9("sync: ยังไม่พร้อม (" + missing.join(", ") + ")");
+    return null;
+  }
+
+  return {
+    fb,
+    user,
+    masterRef: fb.doc(fb.db, "users", user.uid, "tracker", "state"),
+    daysCol: fb.collection(fb.db, "users", user.uid, "kcalDays")
+  };
+}
+
+async function readAllCloudDaysV9(refs){
+  const snap = await refs.fb.getDocs(refs.daysCol);
+  const days = {};
+
+  snap.forEach(docSnap => {
+    days[docSnap.id] = normalizeCloudDocV9(docSnap.data());
+  });
+
+  return days;
+}
+
+async function writeAllDaysV9(refs, days){
+  const entries = Object.entries(days || {});
+
+  for(const [dateStr, day] of entries){
+    const dayRef = refs.fb.doc(refs.fb.db, "users", refs.user.uid, "kcalDays", dateStr);
+    await refs.fb.setDoc(dayRef, sanitizeDayV9(day), { merge:false });
+  }
+}
+
+async function syncNowV9(reason = "manual"){
+  if(window.__syncNowRunningV9) return;
+
+  const refs = getRefsV9();
+  if(!refs) return;
+
+  window.__syncNowRunningV9 = true;
+  syncStatusV9("sync: กำลังซิงก์...");
+
+  try{
+    const localSnapshot = cloneV9(state);
+
+    const masterSnap = await refs.fb.getDoc(refs.masterRef);
+    const cloudMasterRaw = masterSnap.exists() ? normalizeCloudDocV9(masterSnap.data()) : {};
+    const cloudDaysFromMaster = cloudMasterRaw.kcalDays || {};
+    const cloudDaysFromCollection = await readAllCloudDaysV9(refs);
+
+    const cloudDays = {
+      ...cloudDaysFromMaster,
+      ...cloudDaysFromCollection
+    };
+
+    const mergedMaster = mergeMasterStateV9(localSnapshot, cloudMasterRaw);
+    const mergedDays = mergeDaysV9(localSnapshot.kcalDays, cloudDays);
+
+    const nextState = {
+      ...mergedMaster,
+      kcalDays: mergedDays,
+      aiChatHistory: Array.isArray(localSnapshot.aiChatHistory) ? localSnapshot.aiChatHistory.slice(-40) : []
+    };
+
+    replaceStateV9(nextState);
+
+    await refs.fb.setDoc(refs.masterRef, buildMasterStateV9(nextState), { merge:false });
+    await writeAllDaysV9(refs, mergedDays);
+
+    try{
+      if(typeof saveState === "function") saveState();
+    }catch(err){}
+
+    renderAfterSyncV9();
+
+    const time = new Date().toLocaleTimeString("th-TH", {
+      hour:"2-digit",
+      minute:"2-digit"
+    });
+
+    syncStatusV9(`sync: สำเร็จ ${time} · uid ${refs.user.uid.slice(-6)} · ${reason}`);
+    console.log("sync success v1.6.9", { reason, uid:refs.user.uid, days:Object.keys(mergedDays).length });
+  }catch(err){
+    console.error("sync failed v1.6.9", err);
+    syncStatusV9("sync: ไม่สำเร็จ ดู Console");
+  }finally{
+    setTimeout(() => {
+      window.__syncNowRunningV9 = false;
+    }, 900);
+  }
+}
+
+function ensureSingleSyncButtonV9(){
+  const dataTools = document.querySelector(".data-tools-card");
+  if(!dataTools) return;
+
+  const actions = dataTools.querySelector(".data-tool-actions") || dataTools;
+
+  // remove duplicate sync buttons
+  const oldBtns = Array.from(dataTools.querySelectorAll("button")).filter(btn => {
+    const text = (btn.textContent || "").trim().toLowerCase();
+    return text === "sync now" || /^syncNowBtnV/i.test(btn.id || "");
+  });
+
+  let btn = oldBtns[0];
+  oldBtns.slice(1).forEach(el => el.remove());
+
+  if(!btn){
+    btn = document.createElement("button");
+    actions.appendChild(btn);
+  }
+
+  btn.id = "syncNowBtnV9";
+  btn.type = "button";
+  btn.className = "sync-now-btn-v4";
+  btn.textContent = "Sync Now";
+  btn.onclick = function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    syncNowV9("manual-button");
+  };
+
+  // remove duplicate status lines
+  const oldStatuses = Array.from(dataTools.querySelectorAll("#syncStatusV4, #syncStatusV5, #syncStatusV6, #syncStatusV8, #syncStatusV9, .sync-status-v4"));
+  let status = oldStatuses[0];
+  oldStatuses.slice(1).forEach(el => el.remove());
+
+  if(!status){
+    status = document.createElement("div");
+    dataTools.appendChild(status);
+  }
+
+  status.id = "syncStatusV9";
+  status.className = "sync-status-v4";
+
+  const user = userV9();
+
+  if(user?.uid && (!status.textContent || status.textContent.includes("ยังไม่พร้อม") || status.textContent.includes("รอ login"))){
+    status.textContent = "sync: พร้อม · uid " + user.uid.slice(-6);
+  }else if(!status.textContent){
+    status.textContent = "sync: รอ login";
+  }
+}
+
+// Disable old sync engines that still try to write the huge master doc
+try{ if(window.__crossDeviceUnsubscribeV2){ window.__crossDeviceUnsubscribeV2(); window.__crossDeviceUnsubscribeV2 = null; } }catch(err){}
+try{ startCrossDeviceCloudListenerV2 = function(){}; }catch(err){}
+try{ applyCloudSnapshotCrossDeviceV2 = function(){}; }catch(err){}
+try{ pushMergedCloudStateV2 = async function(reason="old"){ return syncNowV9(reason); }; }catch(err){}
+try{ syncNowV8 = async function(reason="manual"){ return syncNowV9(reason); }; }catch(err){}
+try{ syncNowV5 = async function(reason="manual"){ return syncNowV9(reason); }; }catch(err){}
+try{ syncNowCloudUnionV4 = async function(reason="manual"){ return syncNowV9(reason); }; }catch(err){}
+try{ saveCloudStateNow = async function(force=false){ return syncNowV9(force ? "save-force" : "save"); }; }catch(err){}
+try{ forceCloudSaveFreshnessV1 = async function(reason="freshness"){ return syncNowV9(reason); }; }catch(err){}
+try{ scheduleForceCloudSaveFreshnessV1 = function(reason="action"){ clearTimeout(window.__syncV9Timer); window.__syncV9Timer = setTimeout(() => syncNowV9(reason), 1400); }; }catch(err){}
+
+document.addEventListener("click", function(e){
+  const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+  if(!btn) return;
+
+  if(btn.id === "syncNowBtnV9" || (btn.textContent || "").trim() === "Sync Now"){
+    e.preventDefault();
+    syncNowV9("manual-delegated");
+    return;
+  }
+
+  const id = btn.id || "";
+  const text = (btn.textContent || "").trim();
+
+  const shouldSync =
+    /add|save|reset|delete|backdate|Food|Exercise|Weight/i.test(id) ||
+    /เพิ่ม|บันทึก|ลบ|Reset|แก้ไขย้อนหลัง|×|\+/.test(text);
+
+  if(shouldSync){
+    clearTimeout(window.__autoSyncV9);
+    window.__autoSyncV9 = setTimeout(() => syncNowV9("after-action"), 2200);
+  }
+}, true);
+
+setTimeout(ensureSingleSyncButtonV9, 600);
+setTimeout(ensureSingleSyncButtonV9, 1600);
+setTimeout(() => syncNowV9("initial"), 3500);
+
+window.addEventListener("focus", function(){
+  setTimeout(() => syncNowV9("focus"), 1400);
+});
+
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "visible"){
+    setTimeout(() => syncNowV9("visible"), 1400);
+  }
+});
+
 </script>
 
 
@@ -8588,7 +9052,7 @@ window.addEventListener("focus", function(){
   // FIREBASE AUTH — Replace firebaseConfig with your project config
   // Firebase Console > Project settings > Your apps > Web app config
   // ============================================================
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';   import {     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';  import {getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';   import {     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';  import {getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",
