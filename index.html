@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.10";
-const APP_BUILD_V1 = "2026.06.20.10";
-const APP_VERSION_NOTE_V1 = "Fix Firestore collection bridge";
+const APP_VERSION_V1 = "v1.6.11";
+const APP_BUILD_V1 = "2026.06.20.11";
+const APP_VERSION_NOTE_V1 = "Fix login after Firestore import cleanup";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -8584,8 +8584,8 @@ window.addEventListener("focus", function(){
 // firebaseBridgeSplitDayV9
 try{
   if(window.__mtFirebase){
-    window.__mtFirebase.collection = collection;
-    window.__mtFirebase.getDocs = getDocs;
+    if(typeof collection !== "undefined") window.__mtFirebase.collection = collection;
+    if(typeof getDocs !== "undefined") window.__mtFirebase.getDocs = getDocs;
     window.__mtFirebase.getDoc = getDoc;
     window.__mtFirebase.setDoc = setDoc;
     window.__mtFirebase.doc = doc;
@@ -8593,8 +8593,8 @@ try{
     window.__mtFirebase.auth = auth;
   }
 
-  window.collection = collection;
-  window.getDocs = getDocs;
+  if(typeof collection !== "undefined") window.collection = collection;
+  if(typeof getDocs !== "undefined") window.getDocs = getDocs;
   window.getDoc = getDoc;
   window.setDoc = setDoc;
   window.doc = doc;
@@ -9057,8 +9057,8 @@ try{
   if(typeof doc !== "undefined") window.__mtFirebase.doc = doc;
   if(typeof getDoc !== "undefined") window.__mtFirebase.getDoc = getDoc;
   if(typeof setDoc !== "undefined") window.__mtFirebase.setDoc = setDoc;
-  if(typeof collection !== "undefined") window.__mtFirebase.collection = collection;
-  if(typeof getDocs !== "undefined") window.__mtFirebase.getDocs = getDocs;
+  if(typeof collection !== "undefined") if(typeof collection !== "undefined") window.__mtFirebase.collection = collection;
+  if(typeof getDocs !== "undefined") if(typeof getDocs !== "undefined") window.__mtFirebase.getDocs = getDocs;
   if(typeof onSnapshot !== "undefined") window.__mtFirebase.onSnapshot = onSnapshot;
 
   window.auth = window.__mtFirebase.auth;
@@ -9125,7 +9125,7 @@ setTimeout(() => {
   // FIREBASE AUTH — Replace firebaseConfig with your project config
   // Firebase Console > Project settings > Your apps > Web app config
   // ============================================================
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';   import {     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';  import {getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, getDocs, getFirestore } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",
@@ -9159,7 +9159,49 @@ setTimeout(() => {
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
 const db = getFirestore(app);
-    window.firebaseDb = db;
+    
+
+// firebaseLoginBridgeV11
+try{
+  window.firebaseLoginBridgeV11 = true;
+
+  window.__mtFirebase = window.__mtFirebase || {};
+  window.__mtFirebase.auth = auth;
+  window.__mtFirebase.db = db;
+  window.__mtFirebase.doc = doc;
+  window.__mtFirebase.getDoc = getDoc;
+  window.__mtFirebase.setDoc = setDoc;
+  window.__mtFirebase.collection = collection;
+  window.__mtFirebase.getDocs = getDocs;
+  window.__mtFirebase.onSnapshot = onSnapshot;
+
+  window.auth = auth;
+  window.db = db;
+  window.doc = doc;
+  window.getDoc = getDoc;
+  window.setDoc = setDoc;
+  window.collection = collection;
+  window.getDocs = getDocs;
+  window.onSnapshot = onSnapshot;
+
+  if(typeof onAuthStateChanged === "function"){
+    onAuthStateChanged(auth, user => {
+      window.currentUser = user || null;
+    });
+  }
+
+  console.log("Firebase login bridge ready v1.6.11", {
+    db: !!window.__mtFirebase.db,
+    doc: typeof window.__mtFirebase.doc,
+    getDoc: typeof window.__mtFirebase.getDoc,
+    setDoc: typeof window.__mtFirebase.setDoc,
+    collection: typeof window.__mtFirebase.collection,
+    getDocs: typeof window.__mtFirebase.getDocs
+  });
+}catch(err){
+  console.warn("Firebase login bridge v1.6.11 failed", err);
+}
+window.firebaseDb = db;
     window.firebaseFirestore = {
       doc,
       getDoc,
