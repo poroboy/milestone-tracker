@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.25
-- Build: 2026.06.21.25
-- Notes: Preserve local AI kcal entries during cloud sync merge
+- Version: v1.6.26
+- Build: 2026.06.21.26
+- Notes: Improve AI food macro and glucose insight fields
 
 ## Current Features
 

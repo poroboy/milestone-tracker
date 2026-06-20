@@ -1,4 +1,4 @@
-const CACHE_NAME = "milestone-tracker-v1.6.25";
+const CACHE_NAME = "milestone-tracker-v1.6.26";
 const APP_SHELL = [
   "./",
   "./index.html",

@@ -1675,7 +1675,7 @@ function verifyAiAutoLogAfterSyncV10(date, expectedItems){
       });
 
       if(restored){
-        console.log("AI auto-log restored after sync merge v1.6.25", { date, expectedItems });
+        console.log("AI auto-log restored after sync merge v1.6.26", { date, expectedItems });
         saveState();
         renderKcalPage();
         try{ if(typeof renderDashboard === "function") renderDashboard(); }catch(err){}
@@ -1684,6 +1684,48 @@ function verifyAiAutoLogAfterSyncV10(date, expectedItems){
       console.warn("AI auto-log post-sync verify failed", err);
     }
   }, 2200);
+}
+
+
+// AI NUTRITION FIELD NORMALIZER V11
+function normalizeAiNutritionFieldsV11(item, kcal, protein){
+  const name = String(item?.name || "").toLowerCase();
+
+  const n = (value) => {
+    const num = Number(String(value ?? "").replace(",", "."));
+    return Number.isFinite(num) && num >= 0 ? Math.round(num) : 0;
+  };
+
+  let carb = n(item?.carb ?? item?.carbs ?? item?.carbohydrate);
+  let sugar = n(item?.sugar);
+  let fiber = n(item?.fiber);
+  let spikeRisk = item?.spikeRisk || item?.glucoseSpikeRisk || "";
+
+  // Conservative fallback when Worker/model does not return macros.
+  // Protein-only items should not look like carb-heavy food.
+  if(!carb && !sugar && !fiber){
+    if(/เวย์|whey|protein|โปรตีน/.test(name)){
+      carb = 2;
+      sugar = 1;
+      fiber = 0;
+    }else if(/ข้าว|เส้น|ก๋วยเตี๋ยว|บะหมี่|ขนมปัง|แป้ง|มัน|เผือก|pasta|rice|noodle|bread/.test(name)){
+      carb = Math.max(25, Math.round(Number(kcal || 0) * 0.45 / 4));
+      sugar = 2;
+      fiber = 2;
+    }else if(/น้ำหวาน|ชาเย็น|ชานม|น้ำอัดลม|ขนม|เค้ก|โดนัท|ไอศกรีม|sweet|dessert|soda|milk tea/.test(name)){
+      carb = Math.max(20, Math.round(Number(kcal || 0) * 0.55 / 4));
+      sugar = Math.max(12, Math.round(carb * 0.55));
+      fiber = 0;
+    }
+  }
+
+  if(!spikeRisk){
+    if(sugar >= 20 || carb >= 60) spikeRisk = "สูง";
+    else if(sugar >= 8 || carb >= 30) spikeRisk = "กลาง";
+    else spikeRisk = "ต่ำ";
+  }
+
+  return { carb, sugar, fiber, spikeRisk };
 }
 
 async function handleAiKcalMessage() {
@@ -1762,10 +1804,11 @@ async function handleAiKcalMessage() {
 
         if (category === "food") {
           const protein = Math.round(Number(item.protein) || 0);
-          const carb = Math.round(Number(item.carb || item.carbs || 0));
-          const sugar = Math.round(Number(item.sugar || 0));
-          const fiber = Math.round(Number(item.fiber || 0));
-          const spikeRisk = item.spikeRisk || item.glucoseSpikeRisk || "ต่ำ";
+          const nutrition = normalizeAiNutritionFieldsV11(item, kcal, protein);
+          const carb = nutrition.carb;
+          const sugar = nutrition.sugar;
+          const fiber = nutrition.fiber;
+          const spikeRisk = nutrition.spikeRisk;
 
           const foodEntry = {
             type: "food",
@@ -4920,9 +4963,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.25";
-const APP_BUILD_V1 = "2026.06.21.25";
-const APP_VERSION_NOTE_V1 = "Preserve local AI kcal entries during cloud sync merge";
+const APP_VERSION_V1 = "v1.6.26";
+const APP_BUILD_V1 = "2026.06.21.26";
+const APP_VERSION_NOTE_V1 = "Improve AI food macro and glucose insight fields";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -5523,7 +5566,7 @@ function mergeStateCloudUnionV4(localState, cloudState){
   );
 
   merged.__syncClientId = getCloudUnionClientIdV4();
-  merged.__syncVersion = "v1.6.25";
+  merged.__syncVersion = "v1.6.26";
   merged.__syncUpdatedAt = Date.now();
 
   return merged;
@@ -5794,7 +5837,7 @@ function mergeCollectionsCloudFirstV6(cloud, local){
     merged.checkinDates = Array.from(checkins).sort();
   }catch(err){}
 
-  merged.__syncVersion = "v1.6.25";
+  merged.__syncVersion = "v1.6.26";
   merged.__syncSource = "cloud-first-v6";
   merged.__syncUpdatedAt = Date.now();
 
@@ -6102,7 +6145,7 @@ function mergeStateV5(localState, cloudState){
   }
 
   merged.__clientUpdatedAt = Date.now();
-  merged.__syncVersion = "v1.6.25";
+  merged.__syncVersion = "v1.6.26";
   merged.__syncUpdatedAt = Date.now();
 
   return merged;
@@ -6166,9 +6209,9 @@ async function syncNowV5(reason = "manual"){
     const time = new Date().toLocaleTimeString("th-TH", { hour:"2-digit", minute:"2-digit" });
 
     setSyncStatusV5(`sync: สำเร็จ ${time} · uid ${uidShort} · ${reason}`);
-    console.log("sync success v1.6.25", { reason, uid: user?.uid, merged });
+    console.log("sync success v1.6.26", { reason, uid: user?.uid, merged });
   }catch(err){
-    console.error("sync failed v1.6.25", err);
+    console.error("sync failed v1.6.26", err);
     setSyncStatusV5("sync: ไม่สำเร็จ ดู Console");
   }finally{
     setTimeout(() => {
@@ -6512,7 +6555,7 @@ function mergeStateV8(localState, cloudState){
 
   merged.__clientUpdatedAt = Date.now();
   merged.__syncUpdatedAt = Date.now();
-  merged.__syncVersion = "v1.6.25";
+  merged.__syncVersion = "v1.6.26";
 
   return merged;
 }
@@ -6589,9 +6632,9 @@ async function syncNowV8(reason = "manual"){
     });
 
     syncStatusV8(`sync: สำเร็จ ${time} · uid ${user.uid.slice(-6)} · ${reason}`);
-    console.log("sync success v1.6.25", { reason, uid:user.uid, merged });
+    console.log("sync success v1.6.26", { reason, uid:user.uid, merged });
   }catch(err){
-    console.error("sync failed v1.6.25", err);
+    console.error("sync failed v1.6.26", err);
     syncStatusV8("sync: ไม่สำเร็จ ดู Console");
   }finally{
     setTimeout(() => {
@@ -6890,7 +6933,7 @@ function buildMasterStateV9(sourceState){
   delete master.messages;
 
   master.__cloudStorageMode = "split-per-day-v1";
-  master.__syncVersion = "v1.6.25";
+  master.__syncVersion = "v1.6.26";
   master.__syncUpdatedAt = Date.now();
   master.__clientUpdatedAt = Date.now();
 
@@ -6921,7 +6964,7 @@ function mergeMasterStateV9(localMaster, cloudMaster){
   });
 
   merged.__cloudStorageMode = "split-per-day-v1";
-  merged.__syncVersion = "v1.6.25";
+  merged.__syncVersion = "v1.6.26";
   merged.__syncUpdatedAt = Date.now();
   merged.__clientUpdatedAt = Date.now();
 
@@ -7049,9 +7092,9 @@ async function syncNowV9(reason = "manual"){
     });
 
     syncStatusV9(`sync: สำเร็จ ${time} · uid ${refs.user.uid.slice(-6)} · ${reason}`);
-    console.log("sync success v1.6.25", { reason, uid:refs.user.uid, days:Object.keys(mergedDays).length });
+    console.log("sync success v1.6.26", { reason, uid:refs.user.uid, days:Object.keys(mergedDays).length });
   }catch(err){
-    console.error("sync failed v1.6.25", err);
+    console.error("sync failed v1.6.26", err);
     syncStatusV9("sync: ไม่สำเร็จ ดู Console");
   }finally{
     setTimeout(() => {
@@ -7203,7 +7246,7 @@ try{
     });
   }
 
-  console.log("Firestore bridge ready v1.6.25", {
+  console.log("Firestore bridge ready v1.6.26", {
     db: !!window.__mtFirebase.db,
     doc: typeof window.__mtFirebase.doc,
     getDoc: typeof window.__mtFirebase.getDoc,
@@ -7212,7 +7255,7 @@ try{
     getDocs: typeof window.__mtFirebase.getDocs
   });
 }catch(err){
-  console.warn("Firestore bridge v1.6.25 failed", err);
+  console.warn("Firestore bridge v1.6.26 failed", err);
 }
 
 setTimeout(() => {
@@ -7288,7 +7331,7 @@ function cloudDayV12(day, clientId){
     exercise: normalized.exercise,
     updatedAtMs: Date.now(),
     updatedBy: clientId,
-    syncVersion: "v1.6.25"
+    syncVersion: "v1.6.26"
   };
 }
 
@@ -7332,7 +7375,7 @@ function masterStateV12(source, clientId){
   delete master.aiMessages;
   delete master.messages;
   master.__cloudStorageMode = "split-per-day-v1";
-  master.__syncVersion = "v1.6.25";
+  master.__syncVersion = "v1.6.26";
   master.__syncUpdatedAt = Date.now();
   master.__clientUpdatedAt = Date.now();
   master.__updatedBy = clientId;
@@ -7511,10 +7554,10 @@ async function syncNowV12(reason = "manual"){
 
     if(permissionDenied){
       window.__syncPermissionRetryAtV13 = Date.now() + 15000;
-      console.error("sync blocked by Firestore rules v1.6.25", err);
+      console.error("sync blocked by Firestore rules v1.6.26", err);
       syncStatusV9("sync: Firestore ยังไม่อนุญาต · ลองใหม่ใน 15 วินาที");
     }else{
-      console.error("sync failed v1.6.25", err);
+      console.error("sync failed v1.6.26", err);
       syncStatusV9("sync: ไม่สำเร็จ ดู Console");
     }
   }finally{
@@ -7636,7 +7679,7 @@ try{
     });
   }
 
-  console.log("Firebase login bridge ready v1.6.25", {
+  console.log("Firebase login bridge ready v1.6.26", {
     db: !!window.__mtFirebase.db,
     doc: typeof window.__mtFirebase.doc,
     getDoc: typeof window.__mtFirebase.getDoc,
@@ -7645,7 +7688,7 @@ try{
     getDocs: typeof window.__mtFirebase.getDocs
   });
 }catch(err){
-  console.warn("Firebase login bridge v1.6.25 failed", err);
+  console.warn("Firebase login bridge v1.6.26 failed", err);
 }
 window.firebaseDb = db;
     window.firebaseFirestore = {

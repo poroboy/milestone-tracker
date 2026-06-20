@@ -285,6 +285,66 @@ async function callGeminiWithFallback(prompt, env) {
   };
 }
 
+
+function normalizeFoodMacroFieldsV1(item) {
+  if (!item || typeof item !== "object") return item;
+
+  const category = String(item.category || item.type || "").toLowerCase();
+  if (category !== "food") return item;
+
+  const n = (value) => {
+    const num = Number(String(value ?? "").replace(",", "."));
+    return Number.isFinite(num) && num >= 0 ? Math.round(num) : 0;
+  };
+
+  const name = String(item.name || "").toLowerCase();
+  const kcal = n(item.kcal);
+  const protein = n(item.protein);
+
+  let carb = n(item.carb ?? item.carbs ?? item.carbohydrate);
+  let sugar = n(item.sugar);
+  let fiber = n(item.fiber);
+  let spikeRisk = item.spikeRisk || item.glucoseSpikeRisk || "";
+
+  if (!carb && !sugar && !fiber) {
+    if (/เวย์|whey|protein|โปรตีน/.test(name)) {
+      carb = 2;
+      sugar = 1;
+      fiber = 0;
+    } else if (/ข้าว|เส้น|ก๋วยเตี๋ยว|บะหมี่|ขนมปัง|แป้ง|มัน|เผือก|rice|noodle|bread|pasta/.test(name)) {
+      carb = Math.max(25, Math.round(kcal * 0.45 / 4));
+      sugar = 2;
+      fiber = 2;
+    } else if (/น้ำหวาน|ชาเย็น|ชานม|น้ำอัดลม|ขนม|เค้ก|โดนัท|ไอศกรีม|sweet|dessert|soda|milk tea/.test(name)) {
+      carb = Math.max(20, Math.round(kcal * 0.55 / 4));
+      sugar = Math.max(12, Math.round(carb * 0.55));
+      fiber = 0;
+    }
+  }
+
+  if (!spikeRisk) {
+    if (sugar >= 20 || carb >= 60) spikeRisk = "สูง";
+    else if (sugar >= 8 || carb >= 30) spikeRisk = "กลาง";
+    else spikeRisk = "ต่ำ";
+  }
+
+  return {
+    ...item,
+    category: "food",
+    kcal,
+    protein,
+    carb,
+    sugar,
+    fiber,
+    spikeRisk
+  };
+}
+
+function normalizeAiItemsMacroFieldsV1(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => normalizeFoodMacroFieldsV1(item));
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -508,3 +568,22 @@ ${message}
     }
   }
 };
+
+
+/*
+IMPORTANT FOOD ITEM RULE:
+For every item where category is "food", you MUST return all of these numeric fields:
+- kcal
+- protein
+- carb
+- sugar
+- fiber
+And also return:
+- spikeRisk: one of "ต่ำ", "กลาง", "สูง"
+
+Estimate carb, sugar, and fiber even when the user does not mention them.
+Use realistic Thai food estimates.
+For protein-only items such as whey/protein drink, use low carb, low sugar, low fiber unless stated otherwise.
+For sweet drinks, dessert, rice, noodles, bread, and starchy food, estimate higher carb/sugar and set spikeRisk accordingly.
+
+*/
