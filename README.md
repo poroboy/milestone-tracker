@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.0
-- Build: 2026.06.19.01
-- Notes: Backdate editor, save freshness guard, metabolic insight
+- Version: v1.6.1
+- Build: 2026.06.20.01
+- Notes: Mobile performance optimization
 
 ## Current Features
 

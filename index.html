@@ -5740,10 +5740,7 @@ document.addEventListener("click", function(e){
   setTimeout(startDashboardFinalStackV9, 300);
 });
 
-// keep layout stable even if old scripts move energy card again
-setInterval(() => {
-  dashboardFinalStackV9();
-}, 2500);
+// mobilePerformanceFixV1: permanent dashboard layout interval removed
 
 
 function toMacroNumber(value){
@@ -6318,19 +6315,7 @@ if(typeof handleAiKcalMessage === "function" && !handleAiKcalMessage.__metabolic
   handleAiKcalMessage.__metabolicRefreshWrapped = true;
 }
 
-// also watch food list changes from AI/manual render
-setTimeout(() => {
-  const foodList = document.getElementById("foodLogList");
-  if(!foodList || foodList.__metabolicObserverReady) return;
-
-  foodList.__metabolicObserverReady = true;
-
-  const observer = new MutationObserver(() => {
-    setTimeout(refreshMetabolicInsightAfterAi, 150);
-  });
-
-  observer.observe(foodList, { childList: true, subtree: true });
-}, 800);
+// mobilePerformanceFixV1: foodLog MutationObserver removed to prevent render loop
 
 
 function overviewMetabolicNumV1(v){
@@ -7077,9 +7062,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.0";
-const APP_BUILD_V1 = "2026.06.19.01";
-const APP_VERSION_NOTE_V1 = "Backdate editor + save freshness guard + metabolic insight";
+const APP_VERSION_V1 = "v1.6.1";
+const APP_BUILD_V1 = "2026.06.20.01";
+const APP_VERSION_NOTE_V1 = "Mobile performance optimization";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
