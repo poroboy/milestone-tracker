@@ -2253,6 +2253,128 @@
     margin-bottom:4px;
   }
 
+
+  /* backdateEditorV1 */
+  .data-tool-btn.backdate{
+    background:#fffaf2;
+    color:var(--ink);
+    border:1px solid #e5d9c8;
+  }
+
+  .backdate-editor-card{
+    margin-top:12px;
+  }
+
+  .backdate-editor-card[hidden]{
+    display:none !important;
+  }
+
+  .backdate-editor-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-top:10px;
+  }
+
+  .backdate-editor-grid.full{
+    grid-template-columns:1fr;
+  }
+
+  .backdate-editor-card label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:5px;
+  }
+
+  .backdate-editor-card input,
+  .backdate-editor-card select{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid #e4d8c8;
+    background:#fffaf2;
+    border-radius:12px;
+    padding:11px 12px;
+    font-family:'Prompt',sans-serif;
+    font-size:13px;
+    outline:none;
+  }
+
+  .backdate-editor-card .backdate-action-btn{
+    border:none;
+    border-radius:12px;
+    padding:12px 14px;
+    background:var(--moss);
+    color:white;
+    font-family:'Prompt',sans-serif;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    width:100%;
+    margin-top:8px;
+  }
+
+  .backdate-editor-card .backdate-summary{
+    margin-top:12px;
+    background:#fbf8f2;
+    border:1px solid #efe8da;
+    border-radius:14px;
+    padding:10px;
+  }
+
+  .backdate-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:9px 0;
+    border-bottom:1px solid #eadfce;
+    font-size:12px;
+  }
+
+  .backdate-row:last-child{
+    border-bottom:none;
+  }
+
+  .backdate-row-main{
+    flex:1;
+    min-width:0;
+  }
+
+  .backdate-row-title{
+    font-weight:900;
+    color:var(--ink);
+  }
+
+  .backdate-row-meta{
+    color:var(--muted);
+    font-size:11px;
+    margin-top:2px;
+    line-height:1.45;
+  }
+
+  .backdate-delete-btn{
+    border:none;
+    background:transparent;
+    color:#b94c2f;
+    font-size:16px;
+    cursor:pointer;
+    padding:4px 6px;
+  }
+
+  .backdate-empty{
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.5;
+    padding:8px 0;
+  }
+
+  @media(max-width:430px){
+    .backdate-editor-grid{
+      grid-template-columns:1fr;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -6388,6 +6510,341 @@ document.addEventListener("click", function(e){
   const tab = e.target.closest ? e.target.closest(".tab") : null;
   if(!tab) return;
   setTimeout(runOverviewMetabolicDuplicateFixV2, 300);
+});
+
+
+function getYesterdayStrV1(){
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return todayStr(d);
+}
+
+function getBackdateSelectedDateV1(){
+  const el = document.getElementById("backdateDateInput");
+  return el && el.value ? el.value : getYesterdayStrV1();
+}
+
+function ensureBackdateEditorV1(){
+  const dataTools = document.querySelector(".data-tools-card");
+  if(!dataTools) return;
+
+  const actions = dataTools.querySelector(".data-tool-actions") || dataTools;
+
+  if(!document.getElementById("openBackdateEditorBtn")){
+    const btn = document.createElement("button");
+    btn.className = "data-tool-btn backdate";
+    btn.id = "openBackdateEditorBtn";
+    btn.type = "button";
+    btn.textContent = "แก้ไขย้อนหลัง";
+    actions.appendChild(btn);
+  }
+
+  if(document.getElementById("backdateEditorCard")) return;
+
+  const card = document.createElement("div");
+  card.className = "kcal-input-card backdate-editor-card";
+  card.id = "backdateEditorCard";
+  card.hidden = true;
+
+  card.innerHTML = `
+    <div class="kcal-input-title">📝 แก้ไขข้อมูลย้อนหลัง</div>
+
+    <div class="backdate-editor-grid">
+      <div>
+        <label>เลือกวันที่ต้องการแก้ไข</label>
+        <input id="backdateDateInput" type="date">
+      </div>
+      <div>
+        <label>ประเภทข้อมูล</label>
+        <select id="backdateTypeSelect">
+          <option value="food">เพิ่มอาหารย้อนหลัง</option>
+          <option value="exercise">เพิ่มออกกำลังกายย้อนหลัง</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="backdateFoodFields">
+      <div class="backdate-editor-grid full">
+        <div>
+          <label>ชื่ออาหาร</label>
+          <input id="backdateFoodName" type="text" placeholder="เช่น ข้าวมันไก่">
+        </div>
+      </div>
+
+      <div class="backdate-editor-grid">
+        <div>
+          <label>kcal</label>
+          <input id="backdateFoodKcal" type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 540">
+        </div>
+        <div>
+          <label>protein g</label>
+          <input id="backdateFoodProtein" type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 25">
+        </div>
+      </div>
+
+      <div class="backdate-editor-grid">
+        <div>
+          <label>แป้ง g</label>
+          <input id="backdateFoodCarb" type="number" min="0" step="1" inputmode="numeric" placeholder="ถ้ามี">
+        </div>
+        <div>
+          <label>น้ำตาล g</label>
+          <input id="backdateFoodSugar" type="number" min="0" step="1" inputmode="numeric" placeholder="ถ้ามี">
+        </div>
+      </div>
+
+      <div class="backdate-editor-grid">
+        <div>
+          <label>ไฟเบอร์ g</label>
+          <input id="backdateFoodFiber" type="number" min="0" step="1" inputmode="numeric" placeholder="ถ้ามี">
+        </div>
+        <div>
+          <button class="backdate-action-btn" id="addBackdateFoodBtn" type="button">เพิ่มอาหารวันนี้ย้อนหลัง</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="backdateExerciseFields" hidden>
+      <div class="backdate-editor-grid full">
+        <div>
+          <label>ชื่อกิจกรรม</label>
+          <input id="backdateExerciseName" type="text" placeholder="เช่น Cardio 20m">
+        </div>
+      </div>
+
+      <div class="backdate-editor-grid">
+        <div>
+          <label>kcal ที่เผา</label>
+          <input id="backdateExerciseKcal" type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 120">
+        </div>
+        <div>
+          <button class="backdate-action-btn" id="addBackdateExerciseBtn" type="button">เพิ่มออกกำลังกายย้อนหลัง</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="backdate-summary" id="backdateSummaryBox"></div>
+  `;
+
+  dataTools.insertAdjacentElement("afterend", card);
+
+  const dateInput = document.getElementById("backdateDateInput");
+  if(dateInput && !dateInput.value){
+    dateInput.value = getYesterdayStrV1();
+  }
+
+  renderBackdateEditorV1();
+}
+
+function setBackdateModeV1(){
+  const type = document.getElementById("backdateTypeSelect")?.value || "food";
+  const foodFields = document.getElementById("backdateFoodFields");
+  const exerciseFields = document.getElementById("backdateExerciseFields");
+
+  if(foodFields) foodFields.hidden = type !== "food";
+  if(exerciseFields) exerciseFields.hidden = type !== "exercise";
+}
+
+function backdateNumberV1(id){
+  const el = document.getElementById(id);
+  const n = Number(el?.value);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function backdateTextV1(id){
+  return String(document.getElementById(id)?.value || "").trim();
+}
+
+function refreshAfterBackdateChangeV1(){
+  if(typeof saveState === "function") saveState();
+
+  if(typeof renderKcalPage === "function") renderKcalPage();
+  if(typeof renderDashboard === "function") renderDashboard();
+
+  setTimeout(() => {
+    ensureBackdateEditorV1();
+    const card = document.getElementById("backdateEditorCard");
+    if(card) card.hidden = false;
+
+    renderBackdateEditorV1();
+
+    if(typeof renderKcalInsulinInsight === "function") renderKcalInsulinInsight();
+    if(typeof renderDashboardInsulinInsight === "function") renderDashboardInsulinInsight();
+    if(typeof enhanceDashboardOverviewMetabolicV1 === "function") enhanceDashboardOverviewMetabolicV1();
+    if(typeof renderEnergyAnalyticsDashboard === "function") renderEnergyAnalyticsDashboard();
+  }, 120);
+}
+
+function addBackdateFoodV1(){
+  const dateStr = getBackdateSelectedDateV1();
+  const name = backdateTextV1("backdateFoodName");
+
+  if(!name){
+    alert("กรุณาใส่ชื่ออาหาร");
+    return;
+  }
+
+  const item = {
+    name,
+    kcal: backdateNumberV1("backdateFoodKcal"),
+    protein: backdateNumberV1("backdateFoodProtein"),
+    carb: backdateNumberV1("backdateFoodCarb"),
+    sugar: backdateNumberV1("backdateFoodSugar"),
+    fiber: backdateNumberV1("backdateFoodFiber")
+  };
+
+  if(typeof normalizeFoodMetabolicItem === "function"){
+    normalizeFoodMetabolicItem(item);
+  }else if(typeof estimateGlucoseSpikeRisk === "function"){
+    item.spikeRisk = estimateGlucoseSpikeRisk(item);
+  }
+
+  const log = getDayLog(dateStr);
+  if(!Array.isArray(log.food)) log.food = [];
+  log.food.push(item);
+
+  ["backdateFoodName", "backdateFoodKcal", "backdateFoodProtein", "backdateFoodCarb", "backdateFoodSugar", "backdateFoodFiber"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+
+  refreshAfterBackdateChangeV1();
+}
+
+function addBackdateExerciseV1(){
+  const dateStr = getBackdateSelectedDateV1();
+  const name = backdateTextV1("backdateExerciseName");
+
+  if(!name){
+    alert("กรุณาใส่ชื่อกิจกรรม");
+    return;
+  }
+
+  const item = {
+    name,
+    kcal: backdateNumberV1("backdateExerciseKcal")
+  };
+
+  const log = getDayLog(dateStr);
+  if(!Array.isArray(log.exercise)) log.exercise = [];
+  log.exercise.push(item);
+
+  ["backdateExerciseName", "backdateExerciseKcal"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+
+  refreshAfterBackdateChangeV1();
+}
+
+function deleteBackdateItemV1(type, idx){
+  const dateStr = getBackdateSelectedDateV1();
+  const log = getDayLog(dateStr);
+  const list = type === "exercise" ? log.exercise : log.food;
+  const item = Array.isArray(list) ? list[idx] : null;
+
+  if(!item) return;
+
+  const label = type === "exercise" ? "ออกกำลังกาย" : "อาหาร";
+  const ok = confirm(`ลบรายการ${label}ย้อนหลังนี้ไหม?\n\n${item.name || "-"}`);
+  if(!ok) return;
+
+  list.splice(idx, 1);
+  refreshAfterBackdateChangeV1();
+}
+
+function renderBackdateEditorV1(){
+  setBackdateModeV1();
+
+  const box = document.getElementById("backdateSummaryBox");
+  if(!box) return;
+
+  const dateStr = getBackdateSelectedDateV1();
+  const log = getDayLog(dateStr);
+  const food = Array.isArray(log.food) ? log.food : [];
+  const exercise = Array.isArray(log.exercise) ? log.exercise : [];
+
+  let html = `<div class="backdate-row-title">รายการของวันที่ ${dateStr}</div>`;
+
+  if(food.length === 0 && exercise.length === 0){
+    html += `<div class="backdate-empty">ยังไม่มีรายการอาหารหรือออกกำลังกายของวันนี้</div>`;
+    box.innerHTML = html;
+    return;
+  }
+
+  food.forEach((item, idx) => {
+    const kcal = Number(item.kcal) || 0;
+    const protein = Number(item.protein) || 0;
+    const carb = Number(item.carb ?? item.carbs ?? item.carbohydrate) || 0;
+    const sugar = Number(item.sugar) || 0;
+    const fiber = Number(item.fiber) || 0;
+
+    html += `
+      <div class="backdate-row">
+        <div class="backdate-row-main">
+          <div class="backdate-row-title">🍚 ${item.name || "-"}</div>
+          <div class="backdate-row-meta">${kcal} kcal · protein ${protein}g · แป้ง ${carb}g · น้ำตาล ${sugar}g · ไฟเบอร์ ${fiber}g</div>
+        </div>
+        <button class="backdate-delete-btn" data-backdate-delete-type="food" data-backdate-delete-idx="${idx}" type="button">×</button>
+      </div>
+    `;
+  });
+
+  exercise.forEach((item, idx) => {
+    const kcal = Number(item.kcal) || 0;
+
+    html += `
+      <div class="backdate-row">
+        <div class="backdate-row-main">
+          <div class="backdate-row-title">🏃 ${item.name || "-"}</div>
+          <div class="backdate-row-meta">เผา ${kcal} kcal</div>
+        </div>
+        <button class="backdate-delete-btn" data-backdate-delete-type="exercise" data-backdate-delete-idx="${idx}" type="button">×</button>
+      </div>
+    `;
+  });
+
+  box.innerHTML = html;
+}
+
+document.addEventListener("click", function(e){
+  if(e.target && e.target.id === "openBackdateEditorBtn"){
+    ensureBackdateEditorV1();
+    const card = document.getElementById("backdateEditorCard");
+    if(card){
+      card.hidden = !card.hidden;
+      if(!card.hidden) renderBackdateEditorV1();
+    }
+  }
+
+  if(e.target && e.target.id === "addBackdateFoodBtn"){
+    addBackdateFoodV1();
+  }
+
+  if(e.target && e.target.id === "addBackdateExerciseBtn"){
+    addBackdateExerciseV1();
+  }
+
+  const del = e.target && e.target.closest ? e.target.closest("[data-backdate-delete-type]") : null;
+  if(del){
+    deleteBackdateItemV1(del.dataset.backdateDeleteType, Number(del.dataset.backdateDeleteIdx));
+  }
+});
+
+document.addEventListener("change", function(e){
+  if(e.target && (e.target.id === "backdateDateInput" || e.target.id === "backdateTypeSelect")){
+    renderBackdateEditorV1();
+  }
+});
+
+setTimeout(ensureBackdateEditorV1, 500);
+setTimeout(ensureBackdateEditorV1, 1500);
+
+document.addEventListener("click", function(e){
+  const tab = e.target.closest ? e.target.closest(".tab") : null;
+  if(!tab) return;
+
+  setTimeout(ensureBackdateEditorV1, 400);
 });
 
 </script>
