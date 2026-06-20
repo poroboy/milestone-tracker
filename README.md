@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.14
-- Build: 2026.06.21.14
-- Notes: Remove undefined fields before Firestore writes
+- Version: v1.6.16
+- Build: 2026.06.21.16
+- Notes: Fix streak local date shift and finalize streak recovery UI
 
 ## Current Features
 
