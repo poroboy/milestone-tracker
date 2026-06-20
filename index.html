@@ -7062,9 +7062,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.1";
-const APP_BUILD_V1 = "2026.06.20.01";
-const APP_VERSION_NOTE_V1 = "Mobile performance optimization";
+const APP_VERSION_V1 = "v1.6.2";
+const APP_BUILD_V1 = "2026.06.20.02";
+const APP_VERSION_NOTE_V1 = "Cross-device cloud sync fix";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -7128,6 +7128,339 @@ document.addEventListener("click", function(e){
   setTimeout(ensureAppVersionBadgeV1, 300);
 });
 
+
+window.crossDeviceCloudSyncFixV2 = true;
+
+const CROSS_DEVICE_CLIENT_ID_KEY_V2 = "milestone_tracker_client_id_v2";
+
+function getClientIdV2(){
+  let id = localStorage.getItem(CROSS_DEVICE_CLIENT_ID_KEY_V2);
+
+  if(!id){
+    id = "client_" + Math.random().toString(36).slice(2) + "_" + Date.now();
+    localStorage.setItem(CROSS_DEVICE_CLIENT_ID_KEY_V2, id);
+  }
+
+  return id;
+}
+
+function safeCloneV2(obj){
+  try{
+    return JSON.parse(JSON.stringify(obj || {}));
+  }catch(err){
+    console.warn("clone failed", err);
+    return {};
+  }
+}
+
+function normalizeCloudPayloadV2(data){
+  if(!data) return null;
+
+  // รองรับหลาย schema เผื่อ document เก็บเป็น {state: ...} หรือเก็บ state ตรง ๆ
+  if(data.state && typeof data.state === "object") return data.state;
+  if(data.data && typeof data.data === "object") return data.data;
+
+  return data;
+}
+
+function listKeyV2(item){
+  const name = String(item?.name || "").trim().toLowerCase();
+  const kcal = Number(item?.kcal) || 0;
+  const protein = Number(item?.protein) || 0;
+  const carb = Number(item?.carb ?? item?.carbs ?? item?.carbohydrate) || 0;
+  const sugar = Number(item?.sugar) || 0;
+  const fiber = Number(item?.fiber) || 0;
+
+  return [name, kcal, protein, carb, sugar, fiber].join("|");
+}
+
+function mergeUniqueListV2(localList, cloudList, normalizer){
+  const result = [];
+  const seen = new Set();
+
+  [...(Array.isArray(localList) ? localList : []), ...(Array.isArray(cloudList) ? cloudList : [])].forEach(raw => {
+    const item = safeCloneV2(raw);
+
+    if(normalizer){
+      try{ normalizer(item); }catch(err){}
+    }
+
+    const key = listKeyV2(item);
+
+    if(!seen.has(key)){
+      seen.add(key);
+      result.push(item);
+    }
+  });
+
+  return result;
+}
+
+function mergeKcalDaysV2(localDays, cloudDays){
+  const merged = safeCloneV2(localDays || {});
+  const cloud = cloudDays || {};
+
+  Object.keys(cloud).forEach(dateStr => {
+    const localDay = merged[dateStr] || {};
+    const cloudDay = cloud[dateStr] || {};
+
+    const day = {
+      ...cloudDay,
+      ...localDay
+    };
+
+    // base kcal เอาค่าที่ไม่ใช่ 0 ก่อน
+    const localBase = Number(localDay.baseKcal ?? localDay.base ?? 0) || 0;
+    const cloudBase = Number(cloudDay.baseKcal ?? cloudDay.base ?? 0) || 0;
+
+    if(localBase > 0){
+      day.baseKcal = localBase;
+    }else if(cloudBase > 0){
+      day.baseKcal = cloudBase;
+    }
+
+    day.food = mergeUniqueListV2(
+      localDay.food,
+      cloudDay.food,
+      typeof normalizeFoodMetabolicItem === "function" ? normalizeFoodMetabolicItem : null
+    );
+
+    day.exercise = mergeUniqueListV2(localDay.exercise, cloudDay.exercise, null);
+
+    merged[dateStr] = day;
+  });
+
+  return merged;
+}
+
+function mergeWeightLogsV2(localWeightLogs, cloudWeightLogs){
+  if(Array.isArray(localWeightLogs) || Array.isArray(cloudWeightLogs)){
+    const list = [];
+    const seen = new Set();
+
+    [...(Array.isArray(localWeightLogs) ? localWeightLogs : []), ...(Array.isArray(cloudWeightLogs) ? cloudWeightLogs : [])].forEach(item => {
+      const key = `${item?.date || item?.dateStr || ""}|${item?.weight || item?.value || ""}`;
+      if(!seen.has(key)){
+        seen.add(key);
+        list.push(item);
+      }
+    });
+
+    return list;
+  }
+
+  return {
+    ...(cloudWeightLogs || {}),
+    ...(localWeightLogs || {})
+  };
+}
+
+function mergeTrackerStateCrossDeviceV2(localState, cloudState){
+  const local = safeCloneV2(localState || {});
+  const cloud = safeCloneV2(cloudState || {});
+
+  const merged = {
+    ...cloud,
+    ...local
+  };
+
+  merged.kcalDays = mergeKcalDaysV2(local.kcalDays, cloud.kcalDays);
+  merged.weightLogs = mergeWeightLogsV2(local.weightLogs, cloud.weightLogs);
+
+  // aiChatHistory รวมแบบไม่ให้ซ้ำมากเกินไป
+  if(Array.isArray(local.aiChatHistory) || Array.isArray(cloud.aiChatHistory)){
+    const all = [
+      ...(Array.isArray(cloud.aiChatHistory) ? cloud.aiChatHistory : []),
+      ...(Array.isArray(local.aiChatHistory) ? local.aiChatHistory : [])
+    ];
+
+    const seen = new Set();
+    merged.aiChatHistory = all.filter(item => {
+      const key = JSON.stringify(item).slice(0, 300);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(-80);
+  }
+
+  merged.__clientUpdatedAt = Math.max(
+    Number(local.__clientUpdatedAt) || 0,
+    Number(cloud.__clientUpdatedAt) || 0,
+    Date.now()
+  );
+
+  merged.__updatedBy = getClientIdV2();
+
+  return merged;
+}
+
+function replaceStateCrossDeviceV2(nextState){
+  if(typeof state !== "object" || !state) return;
+
+  Object.keys(state).forEach(key => delete state[key]);
+  Object.assign(state, nextState);
+}
+
+function renderAfterCrossDeviceMergeV2(){
+  [
+    "renderHome",
+    "renderKcalPage",
+    "renderDashboard",
+    "renderKcalInsulinInsight",
+    "renderDashboardInsulinInsight",
+    "enhanceDashboardOverviewMetabolicV1",
+    "renderEnergyAnalyticsDashboard"
+  ].forEach(name => {
+    try{
+      if(typeof window[name] === "function") window[name]();
+      else if(typeof globalThis[name] === "function") globalThis[name]();
+    }catch(err){
+      console.warn("render after sync failed:", name, err);
+    }
+  });
+}
+
+async function pushMergedCloudStateV2(reason = "cross-device-merge"){
+  if(window.__crossDevicePushingV2) return;
+
+  window.__crossDevicePushingV2 = true;
+
+  try{
+    if(typeof markStateChangedV1 === "function"){
+      markStateChangedV1();
+    }else if(typeof state === "object" && state){
+      state.__clientUpdatedAt = Date.now();
+      state.__updatedBy = getClientIdV2();
+    }
+
+    if(typeof saveState === "function"){
+      saveState();
+    }
+
+    if(typeof saveCloudStateNow === "function"){
+      await saveCloudStateNow(true);
+    }
+
+    console.log("cross-device cloud pushed:", reason);
+  }catch(err){
+    console.warn("cross-device cloud push failed:", reason, err);
+  }finally{
+    setTimeout(() => {
+      window.__crossDevicePushingV2 = false;
+    }, 500);
+  }
+}
+
+function getCloudDocRefV2(){
+  if(typeof currentUser === "undefined" || !currentUser || !currentUser.uid) return null;
+  if(typeof db === "undefined" || !db) return null;
+  if(typeof doc !== "function") return null;
+
+  return doc(db, "users", currentUser.uid, "tracker", "state");
+}
+
+function applyCloudSnapshotCrossDeviceV2(cloudPayload, reason = "snapshot"){
+  if(window.__crossDevicePushingV2) return;
+  if(!cloudPayload || typeof cloudPayload !== "object") return;
+  if(typeof state !== "object" || !state) return;
+
+  const cloudState = normalizeCloudPayloadV2(cloudPayload);
+  if(!cloudState || typeof cloudState !== "object") return;
+
+  const cloudUpdatedBy = cloudState.__updatedBy || cloudPayload.__updatedBy;
+  if(cloudUpdatedBy && cloudUpdatedBy === getClientIdV2()) return;
+
+  const before = safeCloneV2(state);
+  const merged = mergeTrackerStateCrossDeviceV2(before, cloudState);
+
+  replaceStateCrossDeviceV2(merged);
+
+  try{
+    localStorage.setItem("milestone_tracker_state", JSON.stringify(state));
+  }catch(err){}
+
+  renderAfterCrossDeviceMergeV2();
+
+  clearTimeout(window.__crossDevicePushMergedTimerV2);
+  window.__crossDevicePushMergedTimerV2 = setTimeout(() => {
+    pushMergedCloudStateV2(reason);
+  }, 900);
+
+  console.log("cross-device cloud merged:", reason);
+}
+
+function startCrossDeviceCloudListenerV2(){
+  if(window.__crossDeviceUnsubscribeV2) return;
+
+  const ref = getCloudDocRefV2();
+  if(!ref) return;
+
+  if(typeof onSnapshot !== "function"){
+    console.warn("onSnapshot is not available. Cross-device realtime sync needs Firestore onSnapshot import.");
+    return;
+  }
+
+  window.__crossDeviceUnsubscribeV2 = onSnapshot(ref, snap => {
+    if(!snap.exists()) return;
+
+    const data = snap.data();
+    applyCloudSnapshotCrossDeviceV2(data, "firestore-snapshot");
+  }, err => {
+    console.warn("cross-device snapshot failed", err);
+    window.__crossDeviceUnsubscribeV2 = null;
+  });
+
+  console.log("cross-device cloud listener started");
+}
+
+// Wrap cloud load ให้ merge แทนการเลือก local/cloud ข้างเดียว
+if(typeof loadCloudState === "function" && !loadCloudState.__crossDeviceMergeWrappedV2){
+  const originalLoadCloudStateCrossDeviceV2 = loadCloudState;
+
+  loadCloudState = async function(...args){
+    const before = safeCloneV2(state);
+
+    const result = await originalLoadCloudStateCrossDeviceV2.apply(this, args);
+
+    const afterCloudLoad = safeCloneV2(state);
+    const merged = mergeTrackerStateCrossDeviceV2(before, afterCloudLoad);
+
+    replaceStateCrossDeviceV2(merged);
+
+    try{
+      if(typeof saveState === "function") saveState();
+    }catch(err){}
+
+    setTimeout(startCrossDeviceCloudListenerV2, 400);
+    setTimeout(() => pushMergedCloudStateV2("after-load-merge"), 1200);
+
+    return result;
+  };
+
+  loadCloudState.__crossDeviceMergeWrappedV2 = true;
+}
+
+// force sync หลัง action ที่เปลี่ยนข้อมูล
+document.addEventListener("click", function(e){
+  const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+  if(!btn) return;
+
+  const id = btn.id || "";
+  const text = (btn.textContent || "").trim();
+
+  const shouldSync =
+    /add|save|reset|delete|backdate|Food|Exercise|Weight/i.test(id) ||
+    /เพิ่ม|บันทึก|ลบ|Reset|แก้ไขย้อนหลัง|×|\+/.test(text);
+
+  if(shouldSync){
+    setTimeout(() => pushMergedCloudStateV2("important-action"), 900);
+  }
+}, { passive:true });
+
+setInterval(startCrossDeviceCloudListenerV2, 3000);
+setTimeout(startCrossDeviceCloudListenerV2, 1000);
+setTimeout(startCrossDeviceCloudListenerV2, 3000);
+
 </script>
 
 
@@ -7149,13 +7482,11 @@ document.addEventListener("click", function(e){
     setPersistence
   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 
-import {
-  getFirestore,
+import {getFirestore,
   doc,
   getDoc,
   setDoc,
-  serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+  serverTimestamp, onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",

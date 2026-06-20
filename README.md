@@ -8,15 +8,16 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.1
-- Build: 2026.06.20.01
-- Notes: Mobile performance optimization
+- Version: v1.6.2
+- Build: 2026.06.20.02
+- Notes: Cross-device cloud sync fix
 
 ## Current Features
 
 ### Account & Cloud Sync
 - Google login with Firebase Authentication
 - Firestore cloud sync per user
+- Cross-device Firestore sync with merge protection
 - Local state plus cloud backup behavior
 
 ### Kcal & Protein Tracker
