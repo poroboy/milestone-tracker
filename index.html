@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.9";
-const APP_BUILD_V1 = "2026.06.20.09";
-const APP_VERSION_NOTE_V1 = "Split per-day Firestore sync";
+const APP_VERSION_V1 = "v1.6.10";
+const APP_BUILD_V1 = "2026.06.20.10";
+const APP_VERSION_NOTE_V1 = "Fix Firestore collection bridge";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -9044,6 +9044,79 @@ document.addEventListener("visibilitychange", function(){
   }
 });
 
+
+// firestoreCollectionBridgeV10
+window.firestoreCollectionBridgeV10 = true;
+
+try{
+  window.__mtFirebase = window.__mtFirebase || {};
+
+  if(typeof auth !== "undefined") window.__mtFirebase.auth = auth;
+  if(typeof db !== "undefined") window.__mtFirebase.db = db;
+
+  if(typeof doc !== "undefined") window.__mtFirebase.doc = doc;
+  if(typeof getDoc !== "undefined") window.__mtFirebase.getDoc = getDoc;
+  if(typeof setDoc !== "undefined") window.__mtFirebase.setDoc = setDoc;
+  if(typeof collection !== "undefined") window.__mtFirebase.collection = collection;
+  if(typeof getDocs !== "undefined") window.__mtFirebase.getDocs = getDocs;
+  if(typeof onSnapshot !== "undefined") window.__mtFirebase.onSnapshot = onSnapshot;
+
+  window.auth = window.__mtFirebase.auth;
+  window.db = window.__mtFirebase.db;
+  window.doc = window.__mtFirebase.doc;
+  window.getDoc = window.__mtFirebase.getDoc;
+  window.setDoc = window.__mtFirebase.setDoc;
+  window.collection = window.__mtFirebase.collection;
+  window.getDocs = window.__mtFirebase.getDocs;
+  window.onSnapshot = window.__mtFirebase.onSnapshot;
+
+  if(typeof onAuthStateChanged === "function" && window.__mtFirebase.auth){
+    onAuthStateChanged(window.__mtFirebase.auth, user => {
+      window.currentUser = user || null;
+
+      setTimeout(() => {
+        if(typeof ensureSingleSyncButtonV9 === "function"){
+          ensureSingleSyncButtonV9();
+        }
+
+        if(typeof syncNowV9 === "function" && user){
+          syncNowV9("auth-ready");
+        }
+      }, 800);
+    });
+  }
+
+  console.log("Firestore bridge ready v1.6.10", {
+    db: !!window.__mtFirebase.db,
+    doc: typeof window.__mtFirebase.doc,
+    getDoc: typeof window.__mtFirebase.getDoc,
+    setDoc: typeof window.__mtFirebase.setDoc,
+    collection: typeof window.__mtFirebase.collection,
+    getDocs: typeof window.__mtFirebase.getDocs
+  });
+}catch(err){
+  console.warn("Firestore bridge v1.6.10 failed", err);
+}
+
+setTimeout(() => {
+  try{
+    if(typeof ensureSingleSyncButtonV9 === "function"){
+      ensureSingleSyncButtonV9();
+    }
+
+    const status =
+      document.getElementById("syncStatusV9") ||
+      document.getElementById("syncStatusV8");
+
+    if(status && window.__mtFirebase?.collection && window.__mtFirebase?.getDocs){
+      const user = window.currentUser || window.__mtFirebase?.auth?.currentUser;
+      status.textContent = user?.uid
+        ? "sync: พร้อม · uid " + user.uid.slice(-6)
+        : "sync: รอ login";
+    }
+  }catch(err){}
+}, 1200);
+
 </script>
 
 
@@ -9052,7 +9125,7 @@ document.addEventListener("visibilitychange", function(){
   // FIREBASE AUTH — Replace firebaseConfig with your project config
   // Firebase Console > Project settings > Your apps > Web app config
   // ============================================================
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';   import {     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';  import {getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';   import {     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence   } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';  import {getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, getDocs, getFirestore } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 
   const firebaseConfig = {
   apiKey: "AIzaSyC-UNCULQLlirbWVKKAO7D_kKWi_EX5YAk",
