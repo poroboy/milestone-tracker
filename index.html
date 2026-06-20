@@ -7083,9 +7083,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.5";
-const APP_BUILD_V1 = "2026.06.20.05";
-const APP_VERSION_NOTE_V1 = "Reliable Sync Now with auth fallback";
+const APP_VERSION_V1 = "v1.6.6";
+const APP_BUILD_V1 = "2026.06.20.06";
+const APP_VERSION_NOTE_V1 = "Automatic cross-device sync";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -8159,6 +8159,122 @@ setTimeout(() => syncNowV5("initial"), 2500);
 window.addEventListener("focus", function(){
   setTimeout(() => syncNowV5("focus"), 1000);
 });
+
+
+window.autoCrossDeviceSyncV6 = true;
+
+function setAutoSyncStatusV6(text){
+  const el =
+    document.getElementById("syncStatusV5") ||
+    document.getElementById("syncStatusV4");
+
+  if(el) el.textContent = text;
+  console.log(text);
+}
+
+function canAutoSyncV6(){
+  try{
+    if(typeof auth !== "undefined" && auth?.currentUser?.uid) return true;
+  }catch(err){}
+
+  try{
+    if(typeof currentUser !== "undefined" && currentUser?.uid) return true;
+  }catch(err){}
+
+  return false;
+}
+
+async function runAutoSyncV6(reason = "auto"){
+  if(window.__autoSyncRunningV6) return;
+  if(!canAutoSyncV6()){
+    setAutoSyncStatusV6("sync: รอ login");
+    return;
+  }
+
+  window.__autoSyncRunningV6 = true;
+
+  try{
+    if(typeof syncNowV5 === "function"){
+      await syncNowV5(reason);
+    }else if(typeof syncNowCloudUnionV4 === "function"){
+      await syncNowCloudUnionV4(reason);
+    }else if(typeof saveCloudStateNow === "function"){
+      await saveCloudStateNow(true);
+    }else{
+      setAutoSyncStatusV6("sync: ยังไม่เจอ function sync");
+    }
+  }catch(err){
+    console.warn("auto sync failed:", reason, err);
+    setAutoSyncStatusV6("sync: auto ไม่สำเร็จ ดู Console");
+  }finally{
+    setTimeout(() => {
+      window.__autoSyncRunningV6 = false;
+    }, 900);
+  }
+}
+
+function scheduleAutoSyncV6(reason = "auto", delay = 1500){
+  clearTimeout(window.__autoSyncTimerV6);
+
+  window.__autoSyncTimerV6 = setTimeout(() => {
+    runAutoSyncV6(reason);
+  }, delay);
+}
+
+// 1) autosync ทุกครั้งที่ saveState ถูกเรียก
+if(typeof saveState === "function" && !saveState.__autoCrossDeviceSyncWrappedV6){
+  const originalSaveStateAutoSyncV6 = saveState;
+
+  saveState = function(...args){
+    const result = originalSaveStateAutoSyncV6.apply(this, args);
+
+    scheduleAutoSyncV6("after-save", 1800);
+
+    return result;
+  };
+
+  saveState.__autoCrossDeviceSyncWrappedV6 = true;
+}
+
+// 2) autosync หลัง action สำคัญ เช่น เพิ่ม ลบ reset backdate weight
+document.addEventListener("click", function(e){
+  const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+  if(!btn) return;
+
+  const id = btn.id || "";
+  const text = (btn.textContent || "").trim();
+
+  const shouldAutoSync =
+    /add|save|reset|delete|backdate|Food|Exercise|Weight|kcal|protein/i.test(id) ||
+    /เพิ่ม|บันทึก|ลบ|Reset|แก้ไขย้อนหลัง|น้ำหนัก|วันนี้|×|\+/.test(text);
+
+  if(shouldAutoSync){
+    scheduleAutoSyncV6("after-action", 1600);
+    setTimeout(() => scheduleAutoSyncV6("after-action-retry", 500), 4500);
+  }
+}, true);
+
+// 3) เปิดแอป / กลับเข้าแอป / สลับ tab กลับมา ให้ pull+merge อัตโนมัติ
+window.addEventListener("focus", function(){
+  scheduleAutoSyncV6("focus", 1000);
+});
+
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "visible"){
+    scheduleAutoSyncV6("visible", 1000);
+  }
+});
+
+// 4) หลัง login หรือเปิดหน้าใหม่ ให้ sync อัตโนมัติ
+setTimeout(() => scheduleAutoSyncV6("initial-1", 500), 2500);
+setTimeout(() => scheduleAutoSyncV6("initial-2", 500), 6500);
+
+// 5) sync เบา ๆ ทุก 2 นาที เฉพาะตอนหน้าเปิดอยู่
+setInterval(() => {
+  if(document.visibilityState === "visible"){
+    scheduleAutoSyncV6("interval", 500);
+  }
+}, 120000);
 
 </script>
 
