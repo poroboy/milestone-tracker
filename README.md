@@ -8,9 +8,19 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.27
-- Build: 2026.07.15.27
-- Notes: Final handoff cleanup and updated project notes
+- Version: v1.6.29
+- Build: 2026.07.15.29
+- Notes: Adds weight trend analytics, in-page weight editing, backup restore, and clearer Cloud status
+
+## Release v1.6.29
+
+- Adds a predicted-vs-recorded weight chart with exact values on tap or click
+- Adds 30-day, 90-day, and yearly chart ranges with a 7-day moving average
+- Adds short-term weight pace and plateau analysis
+- Adds in-page editing and deletion for recorded weight history
+- Adds validated JSON Import / Restore alongside the existing Export Data backup
+- Adds a readable Cloud status panel for online, offline, pending, successful, and failed sync states
+- Keeps the existing Firestore paths and data format; no data migration or reset is required
 
 ## Current Features
 
@@ -20,6 +30,7 @@ Current app version shown in the home page:
 - Cross-device Firestore sync with merge protection
 - Manual Sync Now button
 - Automatic sync after save and app focus
+- Clear online/offline, pending-change, and last-successful-sync status
 - Split per-day Firestore sync to avoid 1MB document limit
 - Local state plus cloud backup behavior
 
@@ -72,6 +83,12 @@ If the first model is unavailable or in high demand, the Worker automatically fa
 - Monthly protein trend
 - Daily history by selected month
 - Weight history
+- Predicted vs recorded weight trend chart for the selected year
+- Tappable chart points showing the date, exact weight, and same-day difference
+- 30-day, 90-day, and yearly weight chart ranges
+- 7-day average weight line and 1–4 week pace/plateau analysis
+- Editable and removable weight history entries
+- Automatic direction summary: aligned, unclear, or moving in opposite directions
 - Dashboard weight recorder linked to current weight and weight history
 - Health progress insight
 - Body profile fields:
@@ -84,6 +101,7 @@ If the first model is unavailable or in high demand, the Worker automatically fa
 
 ### Data Management
 - Export all app data as a JSON backup file
+- Import and restore a JSON backup after validation and confirmation
 - Delete individual food and exercise entries for today
 - Reset today's food and exercise logs while preserving base kcal
 
@@ -136,7 +154,9 @@ As the app grows, the next recommended refactor is to split the project into:
 
 ## Backup / Stable Version
 
-Current stable tag: `stable-ai-dashboard-v1`
+Current release tag: `v1.6.29`
+
+Earlier stable tag: `stable-ai-dashboard-v1`
 
 To inspect this stable version:
 

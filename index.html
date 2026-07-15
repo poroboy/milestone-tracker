@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>เส้นทางสู่เป้าหมาย</title>
-<link rel="stylesheet" href="./styles.css?v=2026062118">
+<link rel="stylesheet" href="./styles.css?v=2026071529">
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
@@ -294,10 +294,13 @@
     <div class="kcal-input-title">🗂️ จัดการข้อมูลวันนี้</div>
     <div class="data-tool-actions">
       <button class="data-tool-btn export" id="exportDataBtn">Export Data</button>
+      <button class="data-tool-btn import" id="importDataBtn">Import / Restore</button>
       <button class="data-tool-btn danger" id="resetTodayLogBtn">Reset วันนี้</button>
+      <input type="file" id="importDataFile" accept="application/json,.json" hidden>
     </div>
+    <div class="data-restore-status" id="dataRestoreStatus" aria-live="polite"></div>
     <div class="data-tool-note">
-      Export จะดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์ .json ส่วน Reset วันนี้จะล้างเฉพาะรายการอาหารและออกกำลังกายของวันนี้ โดยยังเก็บ kcal ใช้พื้นฐานไว้
+      Export จะดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์ .json · Import / Restore จะตรวจไฟล์และให้ยืนยันก่อนแทนที่ข้อมูล · Reset วันนี้จะล้างเฉพาะอาหารและออกกำลังกาย โดยยังเก็บ kcal ใช้พื้นฐานไว้
     </div>
   </div>
 
@@ -1349,6 +1352,190 @@ function exportUserData(){
   URL.revokeObjectURL(url);
 }
 
+function cloneBackupValueV2(value, depth = 0){
+  if(depth > 30) throw new Error("โครงสร้างไฟล์ซ้อนลึกเกินไป");
+  if(value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean"){
+    return value;
+  }
+  if(Array.isArray(value)) return value.map(item => cloneBackupValueV2(item, depth + 1));
+  if(typeof value === "object"){
+    const out = {};
+    Object.keys(value).forEach(key => {
+      if(key === "__proto__" || key === "prototype" || key === "constructor") return;
+      out[key] = cloneBackupValueV2(value[key], depth + 1);
+    });
+    return out;
+  }
+  return null;
+}
+
+function normalizeImportedWeightLogsV2(logs){
+  let rows = [];
+  if(Array.isArray(logs)){
+    rows = logs.map((item, idx) => ({
+      date:String(item?.date || item?.dateStr || idx),
+      weight:Number(item?.weight ?? item?.value ?? item)
+    }));
+  }else if(logs && typeof logs === "object"){
+    rows = Object.entries(logs).map(([date,item]) => ({
+      date:String(date),
+      weight:Number(typeof item === "object" ? (item?.weight ?? item?.value) : item)
+    }));
+  }
+
+  const byDate = new Map();
+  rows.forEach(row => {
+    if(/^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.weight) && row.weight > 0){
+      byDate.set(row.date, { date:row.date, weight:row.weight });
+    }
+  });
+  return Array.from(byDate.values()).sort((a,b) => a.date.localeCompare(b.date));
+}
+
+function normalizeImportedDayV2(day){
+  const raw = day && typeof day === "object" ? day : {};
+  const normalizeItems = (items, type) => (Array.isArray(items) ? items : []).map(item => {
+    const normalized = {
+      ...item,
+      name:String(item?.name || "รายการ"),
+      kcal:Math.max(0, Number(item?.kcal) || 0)
+    };
+    if(type === "food") normalized.protein = Math.max(0, Number(item?.protein) || 0);
+    return normalized;
+  });
+  return {
+    ...raw,
+    base:Math.max(0, Number(raw.base ?? raw.baseKcal) || 0),
+    food:normalizeItems(raw.food, "food"),
+    exercise:normalizeItems(raw.exercise, "exercise")
+  };
+}
+
+function prepareRestoredStateV2(rawState){
+  if(!rawState || typeof rawState !== "object" || Array.isArray(rawState)){
+    throw new Error("ไม่พบข้อมูลแอปในไฟล์นี้");
+  }
+
+  const safe = cloneBackupValueV2(rawState);
+  const recognized = ["kcalDays","weightLogs","currentWeight","startWeight","profile","foods","streak"];
+  if(!recognized.some(key => Object.prototype.hasOwnProperty.call(safe, key))){
+    throw new Error("ไฟล์นี้ไม่มีข้อมูลที่ Milestone Tracker รู้จัก");
+  }
+
+  const restored = { ...safe };
+  restored.kcalDays = {};
+  Object.entries(safe.kcalDays || {}).forEach(([dateStr,day]) => {
+    if(/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) restored.kcalDays[dateStr] = normalizeImportedDayV2(day);
+  });
+  restored.weightLogs = normalizeImportedWeightLogsV2(safe.weightLogs);
+  restored.profile = safe.profile && typeof safe.profile === "object" ? safe.profile : {};
+  restored.aiChatHistory = Array.isArray(safe.aiChatHistory) ? safe.aiChatHistory.slice(-40) : [];
+  restored.checkinDates = Array.isArray(safe.checkinDates) ? safe.checkinDates : [];
+  restored.reachedWeightMilestones = Array.isArray(safe.reachedWeightMilestones) ? safe.reachedWeightMilestones : [];
+  restored.reachedStreakMilestones = Array.isArray(safe.reachedStreakMilestones) ? safe.reachedStreakMilestones : [];
+  restored.foods = Array.isArray(safe.foods) ? safe.foods : [...DEFAULT_FOODS];
+  restored.weightMilestones = Array.isArray(safe.weightMilestones)
+    ? safe.weightMilestones
+    : JSON.parse(JSON.stringify(DEFAULT_WEIGHT_MILESTONES));
+  restored.streakMilestones = Array.isArray(safe.streakMilestones)
+    ? safe.streakMilestones
+    : [...DEFAULT_STREAK_MILESTONES];
+  restored.proteinGoal = Math.max(1, Number(safe.proteinGoal) || 100);
+  restored.startWeight = Number(safe.startWeight) || DEFAULT_START_WEIGHT;
+  restored.finalGoal = Number(safe.finalGoal) || DEFAULT_FINAL_GOAL;
+
+  const latestWeight = restored.weightLogs[restored.weightLogs.length - 1]?.weight;
+  restored.currentWeight = Number(safe.currentWeight) || latestWeight || restored.startWeight;
+  return restored;
+}
+
+function parseBackupTextV2(text){
+  let parsed;
+  try{
+    parsed = JSON.parse(text);
+  }catch(err){
+    throw new Error("ไฟล์ JSON อ่านไม่ได้หรือรูปแบบไม่สมบูรณ์");
+  }
+
+  const rawState = parsed?.data && typeof parsed.data === "object"
+    ? parsed.data
+    : (parsed?.state && typeof parsed.state === "object" ? parsed.state : parsed);
+
+  return {
+    state:prepareRestoredStateV2(rawState),
+    meta:{
+      app:parsed?.app || "",
+      exportedAt:parsed?.exportedAt || "",
+      uid:parsed?.uid || ""
+    }
+  };
+}
+
+function setRestoreStatusV2(text, status = ""){
+  const el = document.getElementById("dataRestoreStatus");
+  if(!el) return;
+  el.textContent = text;
+  el.className = `data-restore-status ${status}`.trim();
+}
+
+function renderAfterRestoreV2(){
+  try{ render(); }catch(err){}
+  try{ buildMenuList(); }catch(err){}
+  try{ drawWheel(); }catch(err){}
+  try{ renderKcalPage(); }catch(err){}
+  try{ renderDashboard(); }catch(err){}
+  try{ renderEnergyAnalyticsDashboard(); }catch(err){}
+  try{ ensureSingleSyncButtonV9(); }catch(err){}
+}
+
+async function importBackupFileV2(file){
+  if(!file) return;
+  if(file.size > 10 * 1024 * 1024){
+    setRestoreStatusV2("ไฟล์ใหญ่เกิน 10 MB กรุณาตรวจว่าเลือกไฟล์สำรองถูกไฟล์", "error");
+    return;
+  }
+
+  setRestoreStatusV2("กำลังตรวจไฟล์สำรอง…", "working");
+  try{
+    const parsed = parseBackupTextV2(await file.text());
+    const restored = parsed.state;
+    const dayCount = Object.keys(restored.kcalDays || {}).length;
+    const weightCount = restored.weightLogs.length;
+    const exportedText = parsed.meta.exportedAt
+      ? new Date(parsed.meta.exportedAt).toLocaleString("th-TH")
+      : "ไม่ระบุเวลา";
+    const currentUid = userV9()?.uid || "";
+    const accountWarning = parsed.meta.uid && currentUid && parsed.meta.uid !== currentUid
+      ? "\n\nหมายเหตุ: ไฟล์นี้มาจากบัญชีผู้ใช้อื่น"
+      : "";
+
+    const ok = confirm(
+      `กู้คืนข้อมูลจากไฟล์นี้ไหม?\n\n` +
+      `วันที่ส่งออก: ${exportedText}\n` +
+      `ข้อมูล kcal: ${dayCount} วัน\n` +
+      `ประวัติน้ำหนัก: ${weightCount} รายการ\n\n` +
+      `ข้อมูลปัจจุบันในแอปจะถูกแทนที่ และซิงก์ขึ้น Cloud หลังยืนยัน${accountWarning}`
+    );
+    if(!ok){
+      setRestoreStatusV2("ยกเลิกการกู้คืนแล้ว", "");
+      return;
+    }
+
+    replaceStateV9(restored);
+    weightTrendSelectedPointV1 = null;
+    saveState();
+    renderAfterRestoreV2();
+    setRestoreStatusV2(`กู้คืนแล้ว: ${dayCount} วัน · น้ำหนัก ${weightCount} รายการ`, "success");
+
+    setTimeout(() => {
+      if(typeof syncNowV12 === "function" && userV9()?.uid) syncNowV12("restore-import");
+    }, 400);
+  }catch(err){
+    console.error("backup restore failed", err);
+    setRestoreStatusV2(err?.message || "กู้คืนไม่สำเร็จ กรุณาตรวจไฟล์", "error");
+  }
+}
+
 function refreshAfterKcalChange(){
   saveState();
 
@@ -1405,6 +1592,15 @@ document.addEventListener("click", function(e){
   if(e.target && e.target.id === "resetTodayLogBtn"){
     resetTodayKcalLog();
   }
+
+  if(e.target && e.target.id === "importDataBtn"){
+    document.getElementById("importDataFile")?.click();
+  }
+});
+
+document.getElementById("importDataFile")?.addEventListener("change", function(){
+  const file = this.files?.[0];
+  importBackupFileV2(file).finally(() => { this.value = ""; });
 });
 
 
@@ -2415,6 +2611,431 @@ function getWeightChangeForEnergy(){
   };
 }
 
+function normalizeWeightLogsForTrendV1(){
+  const logs = state?.weightLogs || [];
+  let rows = [];
+
+  if(Array.isArray(logs)){
+    rows = logs.map((item, idx) => ({
+      date: String(item?.date || item?.dateStr || idx),
+      weight: Number(item?.weight ?? item?.value ?? item)
+    }));
+  }else if(logs && typeof logs === "object"){
+    rows = Object.entries(logs).map(([date, item]) => ({
+      date: String(date),
+      weight: Number(typeof item === "object" ? (item?.weight ?? item?.value) : item)
+    }));
+  }
+
+  const byDate = new Map();
+  rows.forEach(row => {
+    if(/^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.weight) && row.weight > 0){
+      byDate.set(row.date, { date:row.date, weight:row.weight });
+    }
+  });
+
+  return Array.from(byDate.values()).sort((a,b) => a.date.localeCompare(b.date));
+}
+
+function getWeightTrendDataV1(year){
+  const yearPrefix = String(year) + "-";
+  const actual = normalizeWeightLogsForTrendV1().filter(row => row.date.startsWith(yearPrefix));
+
+  if(!actual.length){
+    return { actual:[], predicted:[], baseline:null, energyRows:[] };
+  }
+
+  const baseline = actual[0];
+  const energyRows = getEnergyDayRows()
+    .filter(row => row.dateStr.startsWith(yearPrefix) && row.dateStr > baseline.date)
+    .sort((a,b) => a.dateStr.localeCompare(b.dateStr));
+
+  let cumulativeBalance = 0;
+  const predicted = [{ date:baseline.date, weight:baseline.weight }];
+
+  energyRows.forEach(row => {
+    cumulativeBalance += Number(row.balance) || 0;
+    predicted.push({
+      date:row.dateStr,
+      weight:baseline.weight - (cumulativeBalance / KCAL_PER_KG_FAT_ESTIMATE)
+    });
+  });
+
+  return { actual, predicted, baseline, energyRows };
+}
+
+function weightTrendDirectionV1(change){
+  if(change < -0.2) return -1;
+  if(change > 0.2) return 1;
+  return 0;
+}
+
+function formatWeightTrendDateV1(dateStr){
+  const parts = String(dateStr).split("-").map(Number);
+  if(parts.length !== 3) return String(dateStr);
+  return `${parts[2]} ${getThaiShortMonth(parts[1] - 1)}`;
+}
+
+function weightTrendSvgPathV1(points, xScale, yScale){
+  if(!points.length) return "";
+  return points.map((point, idx) => {
+    const command = idx === 0 ? "M" : "L";
+    return `${command}${xScale(point.date).toFixed(1)},${yScale(point.weight).toFixed(1)}`;
+  }).join(" ");
+}
+
+let weightTrendSelectedPointV1 = null;
+let weightTrendRangeV2 = "year";
+
+function getPredictedWeightOnDateV1(data, dateStr){
+  if(!data?.baseline) return null;
+  const balance = data.energyRows
+    .filter(row => row.dateStr <= dateStr)
+    .reduce((sum,row) => sum + (Number(row.balance) || 0), 0);
+  return data.baseline.weight - (balance / KCAL_PER_KG_FAT_ESTIMATE);
+}
+
+function weightTrendDateOffsetV2(dateStr, days){
+  const date = new Date(dateStr + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getWeightTrendAverageV2(actualRows){
+  return (actualRows || []).map((point, idx, rows) => {
+    const cutoff = weightTrendDateOffsetV2(point.date, -6);
+    const windowRows = rows.filter((candidate, candidateIdx) =>
+      candidateIdx <= idx && candidate.date >= cutoff && candidate.date <= point.date
+    );
+    const average = windowRows.reduce((sum,row) => sum + row.weight, 0) / windowRows.length;
+    return { date:point.date, weight:average };
+  });
+}
+
+function getWeightTrendRangeLabelV2(){
+  if(weightTrendRangeV2 === "30") return "30 วันล่าสุด";
+  if(weightTrendRangeV2 === "90") return "90 วันล่าสุด";
+  return "ปีนี้";
+}
+
+function getVisibleWeightTrendDataV2(fullData){
+  if(!fullData?.baseline || weightTrendRangeV2 === "year"){
+    return {
+      ...fullData,
+      average:getWeightTrendAverageV2(fullData?.actual || []),
+      fullData
+    };
+  }
+
+  const dates = [...fullData.actual, ...fullData.predicted].map(point => point.date).sort();
+  const endDate = dates[dates.length - 1];
+  const rangeDays = weightTrendRangeV2 === "30" ? 30 : 90;
+  const cutoff = weightTrendDateOffsetV2(endDate, -(rangeDays - 1));
+  const actual = fullData.actual.filter(point => point.date >= cutoff);
+  let predicted = fullData.predicted.filter(point => point.date >= cutoff);
+
+  if(cutoff >= fullData.baseline.date){
+    const cutoffPoint = { date:cutoff, weight:getPredictedWeightOnDateV1(fullData, cutoff) };
+    if(!predicted.length || predicted[0].date !== cutoff){
+      predicted = [cutoffPoint, ...predicted];
+    }
+  }
+
+  return {
+    ...fullData,
+    actual,
+    predicted,
+    average:getWeightTrendAverageV2(fullData.actual).filter(point => point.date >= cutoff),
+    rangeStart:cutoff,
+    fullData
+  };
+}
+
+function calculateWeightPaceV2(actualRows){
+  if(!Array.isArray(actualRows) || actualRows.length < 3) return null;
+  const latest = actualRows[actualRows.length - 1];
+  const cutoff = weightTrendDateOffsetV2(latest.date, -27);
+  const rows = actualRows.filter(point => point.date >= cutoff);
+  if(rows.length < 3) return null;
+
+  const startMs = Date.parse(rows[0].date + "T00:00:00Z");
+  const points = rows.map(row => ({
+    x:(Date.parse(row.date + "T00:00:00Z") - startMs) / 86400000,
+    y:row.weight
+  }));
+  const spanDays = points[points.length - 1].x;
+  if(spanDays < 7) return null;
+
+  const meanX = points.reduce((sum,p) => sum + p.x, 0) / points.length;
+  const meanY = points.reduce((sum,p) => sum + p.y, 0) / points.length;
+  const numerator = points.reduce((sum,p) => sum + ((p.x - meanX) * (p.y - meanY)), 0);
+  const denominator = points.reduce((sum,p) => sum + ((p.x - meanX) ** 2), 0);
+  const weeklyRate = denominator ? (numerator / denominator) * 7 : 0;
+  return { weeklyRate, spanDays, count:rows.length };
+}
+
+function renderWeightTrendPaceV2(actualRows){
+  const el = document.getElementById("weightTrendPaceV1");
+  if(!el) return;
+  const pace = calculateWeightPaceV2(actualRows);
+
+  if(!pace){
+    el.className = "weight-trend-pace is-waiting";
+    el.textContent = "ความเร็วการลด: บันทึกน้ำหนักอย่างน้อย 3 ครั้งในช่วง 1–4 สัปดาห์เพื่อเริ่มวิเคราะห์";
+    return;
+  }
+
+  const rate = pace.weeklyRate;
+  if(Math.abs(rate) < 0.1 && pace.spanDays >= 14){
+    el.className = "weight-trend-pace is-plateau";
+    el.textContent = `ช่วง ${Math.round(pace.spanDays)} วันที่ผ่านมา น้ำหนักค่อนข้างทรงตัว (${rate >= 0 ? "+" : ""}${rate.toFixed(2)} kg/สัปดาห์)`;
+  }else if(rate < 0){
+    el.className = "weight-trend-pace is-down";
+    el.textContent = `ช่วง ${Math.round(pace.spanDays)} วันที่ผ่านมา ลดเฉลี่ย ${Math.abs(rate).toFixed(2)} kg/สัปดาห์${rate < -1 ? " · ค่อนข้างเร็ว ควรดูพลังงานและความอิ่มร่วมด้วย" : ""}`;
+  }else{
+    el.className = "weight-trend-pace is-up";
+    el.textContent = `ช่วง ${Math.round(pace.spanDays)} วันที่ผ่านมา เพิ่มเฉลี่ย ${rate.toFixed(2)} kg/สัปดาห์`;
+  }
+}
+
+function formatWeightTrendFullDateV1(dateStr){
+  const parts = String(dateStr).split("-").map(Number);
+  if(parts.length !== 3) return String(dateStr);
+  return `${parts[2]} ${getThaiShortMonth(parts[1] - 1)} ${parts[0] + 543}`;
+}
+
+function renderWeightTrendPointDetailV1(){
+  const detailEl = document.getElementById("weightTrendPointDetailV1");
+  if(!detailEl) return;
+
+  const selected = weightTrendSelectedPointV1;
+  if(!selected || selected.year !== dashboardYear){
+    detailEl.className = "weight-trend-point-detail is-hint";
+    detailEl.textContent = "แตะหรือคลิกจุดบนกราฟ เพื่อดูวันที่และน้ำหนักของจุดนั้น";
+    return;
+  }
+
+  const data = getWeightTrendDataV1(dashboardYear);
+  const actualOnDate = data.actual.find(point => point.date === selected.date);
+  const predictedOnDate = getPredictedWeightOnDateV1(data, selected.date);
+  const typeLabel = selected.type === "actual" ? "ชั่งจริง" : "แอปคาดการณ์";
+  let compareText = "";
+
+  if(selected.type === "actual" && predictedOnDate != null){
+    const diff = selected.weight - predictedOnDate;
+    compareText = ` · ${diff >= 0 ? "สูงกว่า" : "ต่ำกว่า"}ค่าคาดการณ์ ${Math.abs(diff).toFixed(1)} kg`;
+  }else if(selected.type === "predicted" && actualOnDate){
+    const diff = actualOnDate.weight - selected.weight;
+    compareText = ` · ชั่งจริง ${actualOnDate.weight.toFixed(1)} kg (${diff >= 0 ? "สูงกว่า" : "ต่ำกว่า"} ${Math.abs(diff).toFixed(1)} kg)`;
+  }else if(selected.type === "predicted"){
+    compareText = " · วันนี้ไม่มีน้ำหนักชั่งจริง";
+  }
+
+  detailEl.className = `weight-trend-point-detail is-${selected.type}`;
+  detailEl.innerHTML = `<b>${typeLabel}: ${selected.weight.toFixed(1)} kg</b><span>${formatWeightTrendFullDateV1(selected.date)}${compareText}</span>`;
+}
+
+function selectWeightTrendPointV1(pointEl){
+  if(!pointEl) return;
+  const weight = Number(pointEl.dataset.weightTrendWeight);
+  const date = pointEl.dataset.weightTrendDate || "";
+  const type = pointEl.dataset.weightTrendPoint || "";
+  if(!Number.isFinite(weight) || !date || !type) return;
+
+  weightTrendSelectedPointV1 = { type, date, weight, year:dashboardYear };
+
+  document.querySelectorAll("[data-weight-trend-point]").forEach(el => {
+    const selected = el.dataset.weightTrendPoint === type && el.dataset.weightTrendDate === date;
+    el.classList.toggle("is-selected", selected);
+    el.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+
+  renderWeightTrendPointDetailV1();
+}
+
+function renderWeightTrendChartV1(){
+  const card = document.getElementById("weightTrendCardV1");
+  const chartEl = document.getElementById("weightTrendChartV1");
+  const summaryEl = document.getElementById("weightTrendSummaryV1");
+  const noteEl = document.getElementById("weightTrendNoteV1");
+  if(!card || !chartEl || !summaryEl || !noteEl) return;
+
+  const fullData = getWeightTrendDataV1(dashboardYear);
+  const data = getVisibleWeightTrendDataV2(fullData);
+  const buddhistYear = Number(dashboardYear) + 543;
+
+  document.querySelectorAll("[data-weight-trend-range]").forEach(btn => {
+    const active = btn.dataset.weightTrendRange === weightTrendRangeV2;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  renderWeightTrendPaceV2(fullData.actual);
+
+  if(!fullData.baseline){
+    weightTrendSelectedPointV1 = null;
+    summaryEl.className = "weight-trend-summary is-waiting";
+    summaryEl.textContent = `ยังสร้างกราฟปี ${buddhistYear} ไม่ได้`;
+    chartEl.innerHTML = '<div class="weight-trend-empty">บันทึกน้ำหนักอย่างน้อย 1 ครั้ง เพื่อใช้เป็นจุดเริ่มต้นของเส้นคาดการณ์</div>';
+    noteEl.textContent = "เมื่อน้ำหนักและ kcal ถูกบันทึก กราฟจะอัปเดตอัตโนมัติ";
+    return;
+  }
+
+  const latestActual = data.actual[data.actual.length - 1] || null;
+  const firstActual = data.actual[0] || null;
+  const predictedAtLatestActual = latestActual ? getPredictedWeightOnDateV1(fullData, latestActual.date) : null;
+  const predictedAtFirstActual = firstActual ? getPredictedWeightOnDateV1(fullData, firstActual.date) : null;
+  const actualChange = firstActual && latestActual ? latestActual.weight - firstActual.weight : 0;
+  const predictedChange = predictedAtFirstActual != null && predictedAtLatestActual != null
+    ? predictedAtLatestActual - predictedAtFirstActual
+    : 0;
+
+  if(data.actual.length < 2){
+    summaryEl.className = "weight-trend-summary is-waiting";
+    summaryEl.innerHTML = data.actual.length
+      ? `<b>รอชั่งจริงเพิ่มอีก 1 ครั้งในช่วงนี้</b><span>${getWeightTrendRangeLabelV2()} · จุดล่าสุด ${latestActual.weight.toFixed(1)} kg · ${formatWeightTrendDateV1(latestActual.date)}</span>`
+      : `<b>ยังไม่มีน้ำหนักชั่งจริงในช่วงนี้</b><span>${getWeightTrendRangeLabelV2()} · ลองเลือกช่วงเวลาที่ยาวขึ้น</span>`;
+  }else{
+    const actualDirection = weightTrendDirectionV1(actualChange);
+    const predictedDirection = weightTrendDirectionV1(predictedChange);
+    let statusClass = "is-mixed";
+    let statusText = "แนวโน้มยังไม่ชัด";
+
+    if(actualDirection === predictedDirection){
+      statusClass = "is-aligned";
+      statusText = "ไปทางเดียวกัน";
+    }else if(actualDirection !== 0 && predictedDirection !== 0){
+      statusClass = "is-opposite";
+      statusText = "สวนทางกัน";
+    }
+
+    const actualSign = actualChange > 0 ? "+" : "";
+    const predictedSign = predictedChange > 0 ? "+" : "";
+    summaryEl.className = `weight-trend-summary ${statusClass}`;
+    summaryEl.innerHTML = `<b>${statusText}</b><span>${getWeightTrendRangeLabelV2()} · ถึง ${formatWeightTrendDateV1(latestActual.date)} · แอป ${predictedSign}${predictedChange.toFixed(1)} kg · ชั่งจริง ${actualSign}${actualChange.toFixed(1)} kg</span>`;
+  }
+
+  const allPoints = [...data.predicted, ...data.actual, ...data.average];
+  const width = Math.max(300, Math.min(680, Math.round(chartEl.clientWidth || 320)));
+  const height = width < 390 ? 250 : 280;
+  const margin = { top:16, right:14, bottom:38, left:48 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const dateValues = allPoints.map(point => Date.parse(point.date + "T00:00:00Z"));
+  let minDate = Math.min(...dateValues);
+  let maxDate = Math.max(...dateValues);
+  if(minDate === maxDate) maxDate += 86400000;
+
+  const weights = allPoints.map(point => Number(point.weight));
+  const rawMin = Math.min(...weights);
+  const rawMax = Math.max(...weights);
+  const yPadding = Math.max(0.5, (rawMax - rawMin) * 0.18);
+  const yMin = Math.floor((rawMin - yPadding) * 2) / 2;
+  const yMax = Math.ceil((rawMax + yPadding) * 2) / 2;
+  const yRange = Math.max(1, yMax - yMin);
+
+  const xScale = date => margin.left + ((Date.parse(date + "T00:00:00Z") - minDate) / (maxDate - minDate)) * plotWidth;
+  const yScale = weight => margin.top + ((yMax - Number(weight)) / yRange) * plotHeight;
+  const predictedPath = weightTrendSvgPathV1(data.predicted, xScale, yScale);
+  const actualPath = weightTrendSvgPathV1(data.actual, xScale, yScale);
+  const averagePath = weightTrendSvgPathV1(data.average, xScale, yScale);
+
+  const yTicks = Array.from({length:4}, (_,idx) => yMin + ((yRange * idx) / 3));
+  const yGrid = yTicks.map(value => {
+    const y = yScale(value);
+    return `<line class="weight-trend-grid" x1="${margin.left}" y1="${y.toFixed(1)}" x2="${width - margin.right}" y2="${y.toFixed(1)}"></line>
+      <text class="weight-trend-axis-label" x="${margin.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end">${value.toFixed(1)}</text>`;
+  }).join("");
+
+  const middleDate = minDate + ((maxDate - minDate) / 2);
+  const xTicks = [minDate, middleDate, maxDate];
+  const xLabels = xTicks.map((time,idx) => {
+    const d = new Date(time);
+    const dateStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
+    const anchor = idx === 0 ? "start" : (idx === 2 ? "end" : "middle");
+    const x = idx === 0 ? margin.left : (idx === 2 ? width - margin.right : margin.left + plotWidth / 2);
+    return `<text class="weight-trend-axis-label" x="${x}" y="${height - 12}" text-anchor="${anchor}">${formatWeightTrendDateV1(dateStr)}</text>`;
+  }).join("");
+
+  const actualDots = data.actual.map(point => `
+    <circle class="weight-trend-dot actual" cx="${xScale(point.date).toFixed(1)}" cy="${yScale(point.weight).toFixed(1)}" r="4"
+      role="button" tabindex="0" aria-pressed="false"
+      aria-label="${formatWeightTrendFullDateV1(point.date)} ชั่งจริง ${point.weight.toFixed(1)} กิโลกรัม"
+      data-weight-trend-point="actual" data-weight-trend-date="${point.date}" data-weight-trend-weight="${point.weight.toFixed(3)}">
+      <title>${formatWeightTrendDateV1(point.date)} ชั่งจริง ${point.weight.toFixed(1)} kg</title>
+    </circle>`).join("");
+  const predictedDots = data.predicted.map((point,idx) => {
+    const isLast = idx === data.predicted.length - 1;
+    return `
+      <circle class="weight-trend-dot predicted" cx="${xScale(point.date).toFixed(1)}" cy="${yScale(point.weight).toFixed(1)}" r="${isLast ? "3.5" : "2.5"}"
+        role="button" tabindex="0" aria-pressed="false"
+        aria-label="${formatWeightTrendFullDateV1(point.date)} แอปคาดการณ์ ${point.weight.toFixed(1)} กิโลกรัม"
+        data-weight-trend-point="predicted" data-weight-trend-date="${point.date}" data-weight-trend-weight="${point.weight.toFixed(3)}">
+        <title>${formatWeightTrendDateV1(point.date)} แอปคาดการณ์ ${point.weight.toFixed(1)} kg</title>
+      </circle>`;
+  }).join("");
+
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="กราฟเปรียบเทียบน้ำหนักที่แอปคาดการณ์กับน้ำหนักที่ชั่งจริงในปี ${buddhistYear}">
+      ${yGrid}
+      <path class="weight-trend-line predicted" d="${predictedPath}"></path>
+      <path class="weight-trend-line actual" d="${actualPath}"></path>
+      <path class="weight-trend-line average" d="${averagePath}"></path>
+      ${predictedDots}
+      ${actualDots}
+      ${xLabels}
+    </svg>`;
+
+  if(weightTrendSelectedPointV1?.year === dashboardYear){
+    const selectedEl = chartEl.querySelector(
+      `[data-weight-trend-point="${weightTrendSelectedPointV1.type}"][data-weight-trend-date="${weightTrendSelectedPointV1.date}"]`
+    );
+    if(selectedEl){
+      selectedEl.classList.add("is-selected");
+      selectedEl.setAttribute("aria-pressed", "true");
+    }else{
+      weightTrendSelectedPointV1 = null;
+    }
+  }
+  renderWeightTrendPointDetailV1();
+
+  const latestPredicted = data.predicted[data.predicted.length - 1];
+  const compareDiff = latestActual && predictedAtLatestActual != null
+    ? latestActual.weight - predictedAtLatestActual
+    : null;
+  const compareText = data.actual.length >= 2 && compareDiff != null
+    ? `วันที่ชั่งล่าสุด น้ำหนักจริง${compareDiff >= 0 ? "สูงกว่า" : "ต่ำกว่า"}เส้นคาดการณ์ ${Math.abs(compareDiff).toFixed(1)} kg`
+    : "ชั่งน้ำหนักเพิ่มเป็นระยะ เพื่อให้เห็นว่าเส้นจริงตามเส้นคาดการณ์หรือไม่";
+  const predictionEndText = latestActual && latestPredicted && latestPredicted.date > latestActual.date
+    ? ` · เส้นคาดการณ์ต่อถึง ${formatWeightTrendDateV1(latestPredicted.date)}`
+    : "";
+  noteEl.textContent = `${compareText}${predictionEndText} · ค่าคาดการณ์ใช้เฉพาะวันที่บันทึก kcal และอาจต่างจากจริงเพราะน้ำในร่างกาย โซเดียม และปัจจัยอื่น`;
+}
+
+let weightTrendResizeTimerV1 = null;
+window.addEventListener("resize", () => {
+  clearTimeout(weightTrendResizeTimerV1);
+  weightTrendResizeTimerV1 = setTimeout(renderWeightTrendChartV1, 160);
+});
+
+document.addEventListener("click", event => {
+  const rangeBtn = event.target?.closest?.("[data-weight-trend-range]");
+  if(rangeBtn){
+    weightTrendRangeV2 = rangeBtn.dataset.weightTrendRange || "year";
+    weightTrendSelectedPointV1 = null;
+    renderWeightTrendChartV1();
+    return;
+  }
+  const point = event.target?.closest?.("[data-weight-trend-point]");
+  if(point) selectWeightTrendPointV1(point);
+});
+
+document.addEventListener("keydown", event => {
+  const point = event.target?.closest?.("[data-weight-trend-point]");
+  if(!point || (event.key !== "Enter" && event.key !== " ")) return;
+  event.preventDefault();
+  selectWeightTrendPointV1(point);
+});
+
 
 function findDashboardPageForEnergy(){
   const directIds = [
@@ -2516,6 +3137,31 @@ function ensureEnergyAnalyticsCard(){
       </div>
     </div>
 
+    <div class="card weight-trend-card" id="weightTrendCardV1">
+      <div class="energy-title-row">
+        <div>
+          <div class="energy-title">📉 แนวโน้มน้ำหนัก: คาดการณ์ vs ชั่งจริง</div>
+          <div class="energy-subtitle">เทียบจากข้อมูลในปีที่เลือก โดยใช้ยอด kcal ที่บันทึก</div>
+        </div>
+      </div>
+
+      <div class="weight-trend-range" aria-label="ช่วงเวลาของกราฟ">
+        <button type="button" data-weight-trend-range="30" aria-pressed="false">30 วัน</button>
+        <button type="button" data-weight-trend-range="90" aria-pressed="false">90 วัน</button>
+        <button type="button" data-weight-trend-range="year" aria-pressed="true">ปีนี้</button>
+      </div>
+      <div class="weight-trend-summary" id="weightTrendSummaryV1"></div>
+      <div class="weight-trend-pace" id="weightTrendPaceV1"></div>
+      <div class="weight-trend-legend" aria-label="คำอธิบายเส้นกราฟ">
+        <span><i class="predicted"></i>แอปคาดการณ์</span>
+        <span><i class="actual"></i>ชั่งจริง</span>
+        <span><i class="average"></i>เฉลี่ย 7 วัน</span>
+      </div>
+      <div class="weight-trend-chart" id="weightTrendChartV1"></div>
+      <div class="weight-trend-point-detail is-hint" id="weightTrendPointDetailV1">แตะหรือคลิกจุดบนกราฟ เพื่อดูวันที่และน้ำหนักของจุดนั้น</div>
+      <div class="weight-trend-note" id="weightTrendNoteV1"></div>
+    </div>
+
     <div class="card energy-chart-card" id="energyChartCard">
       <div class="energy-title-row">
         <div>
@@ -2542,6 +3188,8 @@ function ensureEnergyAnalyticsCard(){
 function renderEnergyAnalyticsDashboard(){
   const card = ensureEnergyAnalyticsCard();
   if(!card) return;
+
+  renderWeightTrendChartV1();
 
   const rows = getEnergyDayRows();
 
@@ -2686,6 +3334,7 @@ function renderDashboard(){
   renderDashboardProtein(ym, proteinGoal);
   renderDashboardWeights(ym);
   renderDashboardInsight(ym, proteinGoal);
+  renderWeightTrendChartV1();
 }
 
 function renderDashboardMonthly(ym){
@@ -2787,6 +3436,8 @@ function renderDashboardProtein(ym, proteinGoal){
   });
 }
 
+let weightHistoryEditingDateV3 = "";
+
 function renderDashboardWeights(ym){
   const list = document.getElementById("dashWeightList");
   list.innerHTML = "";
@@ -2796,16 +3447,143 @@ function renderDashboardWeights(ym){
     return;
   }
 
-  ym.weights.slice(-12).reverse().forEach(w => {
+  ym.weights.slice().reverse().forEach(w => {
+    const isEditing = weightHistoryEditingDateV3 === w.date;
     const row = document.createElement("div");
-    row.className = "dash-weight-row";
-    row.innerHTML = `
+    row.className = "dash-weight-row" + (isEditing ? " is-editing" : "");
+    row.dataset.weightHistoryRow = w.date;
+    row.innerHTML = isEditing ? `
+      <div class="dash-weight-edit" data-weight-history-editor="${w.date}">
+        <div class="dash-weight-edit-fields">
+          <label>
+            <span>วันที่ชั่ง</span>
+            <input type="date" value="${w.date}" data-weight-edit-date aria-label="วันที่ชั่งน้ำหนัก">
+          </label>
+          <label>
+            <span>น้ำหนัก (kg)</span>
+            <input type="number" value="${Number(w.weight).toFixed(1)}" min="20" max="250" step="0.1" inputmode="decimal" data-weight-edit-value aria-label="น้ำหนักกิโลกรัม">
+          </label>
+        </div>
+        <div class="dash-weight-edit-error" data-weight-edit-error role="alert" hidden></div>
+        <div class="dash-weight-edit-actions">
+          <button type="button" class="primary" data-weight-history-action="save" data-weight-history-date="${w.date}">บันทึก</button>
+          <button type="button" data-weight-history-action="cancel" data-weight-history-date="${w.date}">ยกเลิก</button>
+        </div>
+      </div>
+    ` : `
       <div class="date">${w.date}</div>
-      <div class="weight">${Number(w.weight).toFixed(1)} kg</div>
+      <div class="dash-weight-value-group">
+        <div class="weight">${Number(w.weight).toFixed(1)} kg</div>
+        <div class="dash-weight-actions">
+          <button type="button" data-weight-history-action="edit" data-weight-history-date="${w.date}">แก้ไข</button>
+          <button type="button" class="danger" data-weight-history-action="delete" data-weight-history-date="${w.date}">ลบ</button>
+        </div>
+      </div>
     `;
     list.appendChild(row);
   });
 }
+
+function isValidWeightHistoryDateV2(dateStr){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return false;
+  const date = new Date(dateStr + "T00:00:00Z");
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === dateStr;
+}
+
+function replaceWeightHistoryRowsV2(rows){
+  state.weightLogs = rows.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const latest = state.weightLogs[state.weightLogs.length - 1];
+  if(latest){
+    state.currentWeight = Number(latest.weight);
+    if(!state.profile || typeof state.profile !== "object") state.profile = {};
+    state.profile.weight = Number(latest.weight);
+  }
+}
+
+function refreshAfterWeightHistoryChangeV2(){
+  saveState();
+  try{ if(typeof renderHome === "function") renderHome(); }catch(err){}
+  try{ if(typeof renderDashboard === "function") renderDashboard(); }catch(err){}
+  try{ if(typeof renderEnergyAnalyticsDashboard === "function") renderEnergyAnalyticsDashboard(); }catch(err){}
+  try{ if(typeof updateInlineWeightSummary === "function") updateInlineWeightSummary(); }catch(err){}
+  try{ if(typeof updateDashboardWeightRecorderSummary === "function") updateDashboardWeightRecorderSummary(); }catch(err){}
+}
+
+function editWeightHistoryV2(oldDate){
+  const rows = normalizeWeightLogsForTrendV1();
+  const row = rows.find(item => item.date === oldDate);
+  if(!row) return;
+  weightHistoryEditingDateV3 = oldDate;
+  renderDashboardWeights(yearMetrics(dashboardYear));
+
+  requestAnimationFrame(() => {
+    document.querySelector(`[data-weight-history-editor="${oldDate}"] [data-weight-edit-value]`)?.focus();
+  });
+}
+
+function cancelWeightHistoryEditV3(){
+  weightHistoryEditingDateV3 = "";
+  renderDashboardWeights(yearMetrics(dashboardYear));
+}
+
+function showWeightHistoryEditErrorV3(row, message){
+  const error = row?.querySelector?.("[data-weight-edit-error]");
+  if(!error) return;
+  error.textContent = message;
+  error.hidden = false;
+}
+
+function saveWeightHistoryEditV3(oldDate, row){
+  const rows = normalizeWeightLogsForTrendV1();
+  const original = rows.find(item => item.date === oldDate);
+  if(!original){
+    showWeightHistoryEditErrorV3(row, "ไม่พบรายการเดิม กรุณากดยกเลิกแล้วลองใหม่");
+    return;
+  }
+
+  const nextDate = String(row?.querySelector?.("[data-weight-edit-date]")?.value || "").trim();
+  const nextWeight = Number(row?.querySelector?.("[data-weight-edit-value]")?.value);
+
+  if(!isValidWeightHistoryDateV2(nextDate)){
+    showWeightHistoryEditErrorV3(row, "กรุณาเลือกวันที่ให้ถูกต้อง");
+    return;
+  }
+  if(!Number.isFinite(nextWeight) || nextWeight < 20 || nextWeight > 250){
+    showWeightHistoryEditErrorV3(row, "กรุณาใส่น้ำหนักระหว่าง 20–250 kg");
+    return;
+  }
+  if(nextDate !== oldDate && rows.some(item => item.date === nextDate)){
+    showWeightHistoryEditErrorV3(row, `วันที่ ${nextDate} มีข้อมูลอยู่แล้ว กรุณาเลือกวันอื่นหรือลบรายการเดิมก่อน`);
+    return;
+  }
+
+  const nextRows = rows.filter(item => item.date !== oldDate);
+  nextRows.push({ date:nextDate, weight:Math.round(nextWeight * 10) / 10 });
+  weightHistoryEditingDateV3 = "";
+  replaceWeightHistoryRowsV2(nextRows);
+  refreshAfterWeightHistoryChangeV2();
+}
+
+function deleteWeightHistoryV2(dateStr){
+  const rows = normalizeWeightLogsForTrendV1();
+  const row = rows.find(item => item.date === dateStr);
+  if(!row) return;
+  if(!confirm(`ลบน้ำหนักวันที่ ${dateStr} จำนวน ${row.weight.toFixed(1)} kg ไหม?`)) return;
+
+  replaceWeightHistoryRowsV2(rows.filter(item => item.date !== dateStr));
+  refreshAfterWeightHistoryChangeV2();
+}
+
+document.addEventListener("click", event => {
+  const btn = event.target?.closest?.("[data-weight-history-action]");
+  if(!btn) return;
+  const action = btn.dataset.weightHistoryAction;
+  const date = btn.dataset.weightHistoryDate || "";
+  if(action === "edit") editWeightHistoryV2(date);
+  if(action === "cancel") cancelWeightHistoryEditV3();
+  if(action === "save") saveWeightHistoryEditV3(date, btn.closest(".dash-weight-row"));
+  if(action === "delete") deleteWeightHistoryV2(date);
+});
 
 function renderDashboardInsight(ym, proteinGoal){
   const el = document.getElementById("dashInsight");
@@ -4963,9 +5741,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.27";
-const APP_BUILD_V1 = "2026.07.15.27";
-const APP_VERSION_NOTE_V1 = "Final handoff cleanup and updated project notes";
+const APP_VERSION_V1 = "v1.6.29";
+const APP_BUILD_V1 = "2026.07.15.29";
+const APP_VERSION_NOTE_V1 = "Weight trends, backup restore, editable history and clear Cloud status";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
@@ -7584,6 +8362,140 @@ try{
     return syncNowV12("auth-load");
   };
 }catch(err){}
+
+
+// clearCloudStatusV1: readable online/offline and pending-change status
+const LAST_CLOUD_SYNC_KEY_V1 = "milestone_tracker_last_cloud_sync_v1";
+let latestCloudStatusTextV1 = "";
+
+function cloudPendingSummaryV1(){
+  const dirtyDays = window.__dirtyDaysV12 instanceof Set ? window.__dirtyDaysV12.size : 0;
+  const masterDirty = !!window.__masterDirtyV12;
+  return {
+    dirtyDays,
+    masterDirty,
+    total:dirtyDays + (masterDirty ? 1 : 0)
+  };
+}
+
+function formatLastCloudSyncV1(timestamp){
+  const value = Number(timestamp) || 0;
+  if(!value) return "ยังไม่เคยซิงก์สำเร็จบนเครื่องนี้";
+  return "ซิงก์ล่าสุด " + new Date(value).toLocaleString("th-TH", {
+    day:"numeric",
+    month:"short",
+    hour:"2-digit",
+    minute:"2-digit"
+  });
+}
+
+function ensureCloudSyncOverviewV1(){
+  const dataTools = document.querySelector(".data-tools-card");
+  if(!dataTools) return null;
+
+  let overview = document.getElementById("cloudSyncOverviewV1");
+  if(!overview){
+    overview = document.createElement("div");
+    overview.id = "cloudSyncOverviewV1";
+    overview.className = "cloud-sync-overview";
+    overview.setAttribute("aria-live", "polite");
+    overview.innerHTML = `
+      <div class="cloud-sync-main">
+        <i aria-hidden="true"></i>
+        <div>
+          <b id="cloudSyncTitleV1">กำลังตรวจสถานะ Cloud</b>
+          <span id="cloudSyncDetailV1">ข้อมูลจะเก็บในเครื่องระหว่างตรวจสอบ</span>
+        </div>
+      </div>
+      <div class="cloud-sync-meta" id="cloudSyncMetaV1"></div>
+    `;
+    const note = dataTools.querySelector(".data-tool-note");
+    if(note) note.insertAdjacentElement("beforebegin", overview);
+    else dataTools.appendChild(overview);
+  }
+  return overview;
+}
+
+function updateCloudSyncOverviewV1(rawText = latestCloudStatusTextV1){
+  latestCloudStatusTextV1 = String(rawText || latestCloudStatusTextV1 || "");
+  const overview = ensureCloudSyncOverviewV1();
+  if(!overview) return;
+
+  const rawStatus = document.getElementById("syncStatusV9") || document.getElementById("syncStatusV8");
+  if(rawStatus){
+    rawStatus.hidden = true;
+    rawStatus.setAttribute("aria-hidden", "true");
+  }
+
+  const title = document.getElementById("cloudSyncTitleV1");
+  const detail = document.getElementById("cloudSyncDetailV1");
+  const meta = document.getElementById("cloudSyncMetaV1");
+  const pending = cloudPendingSummaryV1();
+  const signedIn = !!userV9()?.uid;
+  const online = navigator.onLine !== false;
+  const text = latestCloudStatusTextV1;
+  let mode = "ready";
+
+  if(!online){
+    mode = "offline";
+    title.textContent = "ออฟไลน์ · ข้อมูลยังปลอดภัยในเครื่อง";
+    detail.textContent = "เมื่อกลับมาออนไลน์ แอปจะซิงก์ให้อัตโนมัติ";
+  }else if(!signedIn || /รอ login|ยังไม่ได้ login/.test(text)){
+    mode = "login";
+    title.textContent = "รอเข้าสู่ระบบ Google";
+    detail.textContent = "เข้าสู่ระบบเพื่อสำรองข้อมูลและใช้ข้ามอุปกรณ์";
+  }else if(/กำลังซิงก์|กำลังโหลด|กำลังตรวจ/.test(text)){
+    mode = "working";
+    title.textContent = "กำลังซิงก์ข้อมูลขึ้น Cloud…";
+    detail.textContent = pending.total ? `มีการเปลี่ยนแปลงรอส่ง ${pending.dirtyDays} วัน` : "กำลังตรวจข้อมูลล่าสุด";
+  }else if(/ไม่สำเร็จ|ไม่อนุญาต|failed/i.test(text)){
+    mode = "error";
+    title.textContent = "Cloud ยังซิงก์ไม่สำเร็จ";
+    detail.textContent = online ? "ข้อมูลยังอยู่ในเครื่อง กด Sync Now เพื่อลองอีกครั้ง" : "รอกลับมาออนไลน์แล้วลองใหม่";
+  }else if(pending.total){
+    mode = "pending";
+    title.textContent = "มีข้อมูลรอซิงก์";
+    detail.textContent = `รายการทั่วไป ${pending.masterDirty ? "มี" : "ไม่มี"} · ข้อมูลรายวัน ${pending.dirtyDays} วัน`;
+  }else{
+    mode = "success";
+    title.textContent = "ข้อมูลทั้งหมดขึ้น Cloud แล้ว";
+    detail.textContent = "เปิดอุปกรณ์อื่นด้วย Google บัญชีเดิมได้";
+  }
+
+  overview.className = `cloud-sync-overview is-${mode}`;
+  meta.textContent = `${formatLastCloudSyncV1(localStorage.getItem(LAST_CLOUD_SYNC_KEY_V1))} · ${online ? "ออนไลน์" : "ออฟไลน์"}`;
+}
+
+try{
+  const syncStatusBeforeClearV1 = syncStatusV9;
+  syncStatusV9 = function(text){
+    const result = syncStatusBeforeClearV1(text);
+    if(/sync: สำเร็จ/.test(String(text || ""))){
+      localStorage.setItem(LAST_CLOUD_SYNC_KEY_V1, String(Date.now()));
+    }
+    updateCloudSyncOverviewV1(text);
+    return result;
+  };
+}catch(err){}
+
+if(typeof saveState === "function" && !saveState.__clearCloudStatusWrappedV1){
+  const saveStateBeforeClearCloudV1 = saveState;
+  saveState = function(...args){
+    const result = saveStateBeforeClearCloudV1.apply(this, args);
+    setTimeout(() => updateCloudSyncOverviewV1(), 0);
+    return result;
+  };
+  saveState.__clearCloudStatusWrappedV1 = true;
+}
+
+window.addEventListener("online", () => {
+  updateCloudSyncOverviewV1("sync: กลับมาออนไลน์ · กำลังซิงก์...");
+  if(typeof syncNowV12 === "function" && userV9()?.uid) syncNowV12("back-online");
+});
+window.addEventListener("offline", () => updateCloudSyncOverviewV1("sync: offline"));
+
+setTimeout(() => updateCloudSyncOverviewV1(), 500);
+setTimeout(() => updateCloudSyncOverviewV1(), 1500);
 
 </script>
 
