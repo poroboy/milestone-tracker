@@ -8,9 +8,9 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.26
-- Build: 2026.06.21.26
-- Notes: Improve AI food macro and glucose insight fields
+- Version: v1.6.27
+- Build: 2026.07.15.27
+- Notes: Final handoff cleanup and updated project notes
 
 ## Current Features
 
@@ -116,7 +116,14 @@ Important data fields include:
 
 ## Development Notes
 
-This project currently uses a single-file app structure in `index.html`.
+This project is a static GitHub Pages app. The main app logic is still in `index.html`, while styling and install/offline support are split into:
+- `styles.css`
+- `manifest.webmanifest`
+- `service-worker.js`
+- `icon-192.png`
+- `icon-512.png`
+
+AI chat is handled by the Cloudflare Worker in `worker/src/index.js`.
 
 As the app grows, the next recommended refactor is to split the project into:
 - index.html
