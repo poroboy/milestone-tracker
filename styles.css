@@ -1,9 +1,9 @@
 /*
   Milestone Tracker
   App CSS extracted from index.html
-  Version: v1.6.30
-  Build: 2026.07.15.30
-  Notes: Keep the version badge and bottom navigation inside mobile screens
+  Version: v1.6.31
+  Build: 2026.07.15.31
+  Notes: Faster app-aware AI and scrollable high-risk meal details
 */
 
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
@@ -2232,6 +2232,100 @@
     border-radius:12px;
     padding:10px;
   }
+  .high-spike-details{
+    margin-top:10px;
+  }
+  .high-spike-title{
+    color:var(--ink);
+    font-family:'Prompt',sans-serif;
+    font-size:12px;
+    font-weight:800;
+  }
+  .high-spike-explain{
+    margin-top:2px;
+    color:var(--muted);
+    font-family:'Prompt',sans-serif;
+    font-size:10px;
+    line-height:1.5;
+  }
+  .high-spike-list{
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    margin-top:8px;
+  }
+  .high-spike-list.is-scrollable{
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding-right:4px;
+    scrollbar-gutter:stable;
+    scroll-snap-type:y proximity;
+  }
+  .high-spike-list.is-scrollable::-webkit-scrollbar{
+    width:5px;
+  }
+  .high-spike-list.is-scrollable::-webkit-scrollbar-thumb{
+    border-radius:999px;
+    background:#d7b8ab;
+  }
+  .high-spike-row{
+    flex:0 0 auto;
+    padding:9px 10px;
+    border:1px solid #efd2c8;
+    border-left:4px solid #c9694e;
+    border-radius:10px;
+    background:#fff7f3;
+    scroll-snap-align:start;
+  }
+  .high-spike-row-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .high-spike-row-head b{
+    min-width:0;
+    color:var(--ink);
+    font-family:'Prompt',sans-serif;
+    font-size:11px;
+    line-height:1.45;
+    overflow-wrap:anywhere;
+  }
+  .high-spike-row-head span{
+    flex:0 0 auto;
+    color:var(--muted);
+    font-family:'DM Mono',monospace;
+    font-size:9px;
+    white-space:nowrap;
+  }
+  .high-spike-macros,
+  .high-spike-reason{
+    margin-top:4px;
+    color:var(--muted);
+    font-family:'Prompt',sans-serif;
+    font-size:9.5px;
+    line-height:1.5;
+  }
+  .high-spike-reason{
+    color:#9b4c37;
+  }
+  .high-spike-scroll-hint{
+    margin-top:8px;
+    color:var(--muted);
+    font-family:'Prompt',sans-serif;
+    font-size:9.5px;
+    text-align:center;
+  }
+  .high-spike-empty{
+    padding:9px 10px;
+    border:1px solid #e2eadf;
+    border-radius:9px;
+    background:#f5faf4;
+    color:var(--moss);
+    font-family:'Prompt',sans-serif;
+    font-size:10.5px;
+    line-height:1.5;
+  }
   .manual-carb-grid{
     display:grid;
     grid-template-columns:repeat(3, minmax(0,1fr));
@@ -2253,6 +2347,10 @@
     .insulin-grid,
     .manual-carb-grid{
       grid-template-columns:1fr;
+    }
+    .high-spike-row-head{
+      flex-direction:column;
+      gap:2px;
     }
   }
 

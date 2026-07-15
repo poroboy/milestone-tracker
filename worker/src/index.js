@@ -1,6 +1,6 @@
 const MODEL_PRIORITY = [
+  "gemini-3.1-flash-lite",
   "gemini-3.5-flash",
-  "gemini-2.5-flash",
   "gemini-2.5-flash-lite"
 ];
 
@@ -8,8 +8,10 @@ const ALLOWED_ORIGINS = [
   "https://poroboy.github.io",
   "http://localhost:5500",
   "http://localhost:5501",
+  "http://localhost:4174",
   "http://127.0.0.1:5500",
-  "http://127.0.0.1:5501"
+  "http://127.0.0.1:5501",
+  "http://127.0.0.1:4174"
 ];
 
 function getCorsOrigin(request) {
@@ -171,28 +173,60 @@ function normalizeMetabolicItems(parsed) {
 
 
 async function callGeminiModel(model, prompt, env) {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": env.GEMINI_API_KEY
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: prompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.35,
-          responseMimeType: "application/json"
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const generationConfig = {
+    temperature: 0.25,
+    responseMimeType: "application/json",
+    maxOutputTokens: 1536
+  };
+
+  if (model === "gemini-3.5-flash") {
+    generationConfig.thinkingConfig = { thinkingLevel: "low" };
+  }
+  if (model.startsWith("gemini-2.5-")) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
+  let res;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": env.GEMINI_API_KEY
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }]
+            }
+          ],
+          generationConfig
+        })
+      }
+    );
+  } catch (err) {
+    return {
+      ok: false,
+      model,
+      status: err?.name === "AbortError" ? 408 : 503,
+      elapsedMs: Date.now() - startedAt,
+      detail: {
+        error: {
+          status: err?.name === "AbortError" ? "MODEL_TIMEOUT" : "MODEL_REQUEST_FAILED",
+          message: String(err?.message || err)
         }
-      })
-    }
-  );
+      }
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const data = await res.json().catch(() => ({
     error: {
@@ -206,6 +240,7 @@ async function callGeminiModel(model, prompt, env) {
       ok: false,
       model,
       status: res.status,
+      elapsedMs: Date.now() - startedAt,
       detail: data
     };
   }
@@ -220,6 +255,7 @@ async function callGeminiModel(model, prompt, env) {
         ok: false,
         model,
         status: 200,
+        elapsedMs: Date.now() - startedAt,
         detail: {
           error: {
             status: "INVALID_AI_JSON_STRUCTURE",
@@ -233,6 +269,7 @@ async function callGeminiModel(model, prompt, env) {
     return {
       ok: true,
       model,
+      elapsedMs: Date.now() - startedAt,
       parsed
     };
   } catch (err) {
@@ -240,6 +277,7 @@ async function callGeminiModel(model, prompt, env) {
       ok: false,
       model,
       status: 200,
+      elapsedMs: Date.now() - startedAt,
       detail: {
         error: {
           status: "INVALID_AI_JSON_PARSE",
@@ -252,6 +290,7 @@ async function callGeminiModel(model, prompt, env) {
 }
 
 async function callGeminiWithFallback(prompt, env) {
+  const startedAt = Date.now();
   const triedModels = [];
 
   for (const model of MODEL_PRIORITY) {
@@ -260,6 +299,7 @@ async function callGeminiWithFallback(prompt, env) {
     triedModels.push({
       model,
       status: result.status || 200,
+      elapsedMs: result.elapsedMs || 0,
       errorStatus: result.detail?.error?.status || null,
       message: result.detail?.error?.message || null
     });
@@ -270,6 +310,7 @@ async function callGeminiWithFallback(prompt, env) {
         parsed: result.parsed,
         model,
         fallbackFrom: model !== MODEL_PRIORITY[0] ? MODEL_PRIORITY[0] : null,
+        processingMs: Date.now() - startedAt,
         triedModels
       };
     }
@@ -371,7 +412,8 @@ export default {
       const userGoal = body.userGoal || {};
       const userProfile = body.userProfile || {};
       const profileMetrics = body.profileMetrics || null;
-      const chatHistory = Array.isArray(body.chatHistory) ? body.chatHistory.slice(-8) : [];
+      const appAnalytics = body.appAnalytics && typeof body.appAnalytics === "object" ? body.appAnalytics : {};
+      const chatHistory = Array.isArray(body.chatHistory) ? body.chatHistory.slice(-6) : [];
 
       if (!message) {
         return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -412,6 +454,11 @@ Important behavior:
 - Use today's kcal context to make useful suggestions.
 - Use current day part and local time when giving meal, snack, workout, or sleep-related advice.
 - Use profile metrics such as BMR, TDEE, BMI, protein target, age, height, gender, and activity level when available.
+- For questions about past progress, weight direction, kcal balance, or protein, use App analytics as the authoritative source.
+- Clearly distinguish recorded weight from app-estimated or predicted weight.
+- Mention the analyzed date range and data coverage when discussing trends.
+- Never invent missing history. If there are too few records, say that more data is needed.
+- Analysis-only questions must return an empty items array and must not create food or exercise logs.
 - Keep reply short, natural, supportive, and in Thai.
 - Do not give medical diagnosis or medical treatment.
 - If the user mentions serious symptoms, chest pain, fainting, eating disorder behavior, or medical conditions, advise seeing a healthcare professional.
@@ -433,6 +480,7 @@ Current user context:
 - Current day part: ${currentTimeContext.dayPart || "unknown"}
 - Current local time: ${currentTimeContext.displayDate || "unknown"} ${currentTimeContext.displayTime || ""}
 - Recent chat history: ${JSON.stringify(chatHistory)}
+- App analytics (compact pre-calculated history): ${JSON.stringify(appAnalytics)}
 
 Required JSON schema:
 {
@@ -550,6 +598,7 @@ ${message}
       parsed.model = fallbackResult.model;
       parsed.fallbackFrom = fallbackResult.fallbackFrom;
       parsed.triedModels = fallbackResult.triedModels;
+      parsed.processingMs = fallbackResult.processingMs;
 
       return new Response(JSON.stringify(parsed), {
         headers: corsHeaders(origin)

@@ -1,6 +1,7 @@
 {
   "name": "milestone-kcal-ai",
-  "version": "0.0.0",
+  "version": "1.6.31",
+  "type": "module",
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",

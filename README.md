@@ -8,9 +8,22 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.30
-- Build: 2026.07.15.30
-- Notes: Fixes mobile overflow in the version badge and four-button bottom navigation
+- Version: v1.6.31
+- Build: 2026.07.15.31
+- Notes: Adds faster app-aware AI and keeps high-risk meal details in a compact scrollable list
+
+## Release v1.6.31
+
+- Sends compact pre-calculated 7, 30, and 90-day app summaries to AI instead of the full database
+- Lets AI answer questions about recorded weight direction, weekly pace, kcal balance, protein, goals, and data coverage
+- Distinguishes recorded weight from app-estimated weight in the analytics context
+- Sends profile metrics and Bangkok date/time context that the Worker already supports
+- Shows clearer progress and request-timeout messages while AI is working
+- Uses a low-latency model first and keeps larger models as fallbacks
+- Keeps the same Firestore paths and does not change or migrate saved user data
+- Lists the date, food name, estimated macros, and reason for every high-risk meal on the kcal and dashboard insights
+- Keeps four high-risk meals visible and scrolls the remaining meals inside the card
+- Normalizes Thai and English risk labels so older food records appear consistently
 
 ## Release v1.6.30
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>เส้นทางสู่เป้าหมาย</title>
-<link rel="stylesheet" href="./styles.css?v=2026071530">
+<link rel="stylesheet" href="./styles.css?v=2026071531">
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
@@ -1924,6 +1924,136 @@ function normalizeAiNutritionFieldsV11(item, kcal, protein){
   return { carb, sugar, fiber, spikeRisk };
 }
 
+// AI APP ANALYTICS CONTEXT V13
+// Send compact, pre-calculated summaries instead of the full Firestore state.
+function aiRoundV13(value, digits = 1){
+  const n = Number(value);
+  if(!Number.isFinite(n)) return null;
+  const factor = Math.pow(10, digits);
+  return Math.round(n * factor) / factor;
+}
+
+function aiDateOffsetV13(dateStr, days){
+  const date = new Date(String(dateStr) + "T12:00:00");
+  date.setDate(date.getDate() + Number(days || 0));
+  return localDateKeyV2(date);
+}
+
+function aiDaysBetweenV13(startDate, endDate){
+  const start = new Date(String(startDate) + "T12:00:00");
+  const end = new Date(String(endDate) + "T12:00:00");
+  return Math.max(0, Math.round((end - start) / 86400000));
+}
+
+function summarizeAiKcalRangeV13(rangeDays, today){
+  const cutoff = aiDateOffsetV13(today, -(rangeDays - 1));
+  const rows = Object.keys(state.kcalDays || {})
+    .filter(dateStr => /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && dateStr >= cutoff && dateStr <= today)
+    .sort()
+    .map(dateStr => ({ date:dateStr, ...dayTotals(dateStr) }))
+    .filter(row => row.hasData);
+
+  const totals = rows.reduce((sum, row) => ({
+    food:sum.food + (Number(row.food) || 0),
+    burn:sum.burn + (Number(row.base) || 0) + (Number(row.exercise) || 0),
+    protein:sum.protein + (Number(row.protein) || 0),
+    net:sum.net + (Number(row.net) || 0),
+    deficitDays:sum.deficitDays + (Number(row.net) < 0 ? 1 : 0)
+  }), { food:0, burn:0, protein:0, net:0, deficitDays:0 });
+
+  const count = rows.length;
+  return {
+    calendarDays:rangeDays,
+    loggedDays:count,
+    firstLoggedDate:rows[0]?.date || null,
+    lastLoggedDate:rows[rows.length - 1]?.date || null,
+    avgFoodKcal:count ? Math.round(totals.food / count) : null,
+    avgBurnKcal:count ? Math.round(totals.burn / count) : null,
+    avgProteinG:count ? Math.round(totals.protein / count) : null,
+    avgNetKcal:count ? Math.round(totals.net / count) : null,
+    totalNetKcal:Math.round(totals.net),
+    estimatedFatChangeKg:aiRoundV13(totals.net / KCAL_PER_KG_FAT_ESTIMATE, 2),
+    deficitDays:totals.deficitDays
+  };
+}
+
+function summarizeAiWeightRowsV13(rows){
+  if(!Array.isArray(rows) || !rows.length) return null;
+  const first = rows[0];
+  const latest = rows[rows.length - 1];
+  const spanDays = aiDaysBetweenV13(first.date, latest.date);
+  const changeKg = Number(latest.weight) - Number(first.weight);
+  return {
+    firstDate:first.date,
+    firstKg:aiRoundV13(first.weight),
+    latestDate:latest.date,
+    latestKg:aiRoundV13(latest.weight),
+    changeKg:aiRoundV13(changeKg),
+    spanDays,
+    weeklyPaceKg:spanDays ? aiRoundV13((changeKg / spanDays) * 7, 2) : null,
+    recordCount:rows.length
+  };
+}
+
+function buildAiAppAnalyticsV13(){
+  const today = localDateKeyV2(new Date());
+  const weights = normalizeWeightLogsForTrendV1().filter(row => row.date <= today);
+  const latestWeight = weights[weights.length - 1] || null;
+  const last30Cutoff = aiDateOffsetV13(today, -29);
+  const last90Cutoff = aiDateOffsetV13(today, -89);
+  const profileMetrics = calcProfileMetrics();
+  const currentYearTrend = getWeightTrendDataV1(Number(today.slice(0, 4)));
+  const latestPredicted = currentYearTrend.predicted[currentYearTrend.predicted.length - 1] || null;
+
+  return {
+    schemaVersion:1,
+    generatedAt:new Date().toISOString(),
+    today,
+    interpretation:{
+      netKcal:"negative means calorie deficit; positive means calorie surplus",
+      weightChangeKg:"negative means weight loss; positive means weight gain",
+      healthData:"estimates only, not a medical diagnosis"
+    },
+    goals:{
+      startWeightKg:aiRoundV13(state.startWeight),
+      currentWeightKg:aiRoundV13(state.currentWeight),
+      finalGoalKg:aiRoundV13(state.finalGoal),
+      remainingToGoalKg:Number.isFinite(Number(state.currentWeight)) && Number.isFinite(Number(state.finalGoal))
+        ? aiRoundV13(Number(state.currentWeight) - Number(state.finalGoal))
+        : null,
+      proteinGoalG:Math.round(Number(state.proteinGoal) || 0),
+      streakDays:Math.round(Number(state.streak) || 0)
+    },
+    weight:{
+      allRecorded:summarizeAiWeightRowsV13(weights),
+      last30Days:summarizeAiWeightRowsV13(weights.filter(row => row.date >= last30Cutoff)),
+      last90Days:summarizeAiWeightRowsV13(weights.filter(row => row.date >= last90Cutoff)),
+      lowestRecordedKg:weights.length ? aiRoundV13(Math.min(...weights.map(row => row.weight))) : null,
+      highestRecordedKg:weights.length ? aiRoundV13(Math.max(...weights.map(row => row.weight))) : null,
+      latestRecord:latestWeight ? { date:latestWeight.date, kg:aiRoundV13(latestWeight.weight) } : null,
+      latestAppPrediction:latestPredicted ? { date:latestPredicted.date, kg:aiRoundV13(latestPredicted.weight) } : null,
+      recentRecords:weights.slice(-12).map(row => ({ date:row.date, kg:aiRoundV13(row.weight) }))
+    },
+    kcalAndProtein:{
+      last7Days:summarizeAiKcalRangeV13(7, today),
+      last30Days:summarizeAiKcalRangeV13(30, today),
+      last90Days:summarizeAiKcalRangeV13(90, today)
+    },
+    profile:state.profile && typeof state.profile === "object" ? {
+      gender:state.profile.gender || "",
+      age:Number(state.profile.age) || null,
+      heightCm:Number(state.profile.heightCm) || null,
+      activityLevel:state.profile.activityLevel || ""
+    } : {},
+    profileMetrics:profileMetrics ? {
+      bmi:profileMetrics.bmi,
+      bmr:profileMetrics.bmr,
+      tdee:profileMetrics.tdee,
+      proteinTargetG:profileMetrics.proteinTarget
+    } : null
+  };
+}
+
 async function handleAiKcalMessage() {
   const input = document.getElementById("aiKcalMessage");
   const reply = document.getElementById("aiKcalReply");
@@ -1942,10 +2072,21 @@ async function handleAiKcalMessage() {
 
   state.aiChatHistory = state.aiChatHistory.slice(-40);
   input.value = "";
-  reply.textContent = "AI กำลังคิดให้...";
+  reply.textContent = "AI กำลังอ่านข้อมูลในแอปและคิดให้...";
   sendBtn.disabled = true;
   renderAiChatHistory();
   saveState();
+
+  const progressTimersV13 = [
+    setTimeout(() => {
+      if(sendBtn.disabled) reply.textContent = "AI กำลังวิเคราะห์แนวโน้มและเตรียมคำตอบ...";
+    }, 2500),
+    setTimeout(() => {
+      if(sendBtn.disabled) reply.textContent = "กำลังใช้โมเดลสำรองเพื่อให้ตอบได้สำเร็จ...";
+    }, 9000)
+  ];
+  const requestControllerV13 = new AbortController();
+  const requestTimeoutV13 = setTimeout(() => requestControllerV13.abort(), 32000);
 
   try {
     const today = localDateKeyV2(new Date());
@@ -1962,20 +2103,26 @@ async function handleAiKcalMessage() {
         currentWeight: state.currentWeight || null,
         todaySummary: totals,
         todayLog: log,
+        currentTimeContext: getCurrentTimeContext(),
+        userProfile: state.profile || {},
+        profileMetrics: calcProfileMetrics(),
+        appAnalytics: buildAiAppAnalyticsV13(),
         userGoal: {
           startWeight: state.startWeight || null,
           finalGoal: state.finalGoal || null,
           currentWeight: state.currentWeight || null,
           streak: state.streak || 0
         },
-        chatHistory: state.aiChatHistory.slice(-8)
-      })
+        chatHistory: state.aiChatHistory.slice(-6)
+      }),
+      signal: requestControllerV13.signal
     });
 
     const data = await res.json();
 
     if(data.model){
-      aiModelName = data.fallbackFrom ? `${data.model} fallback` : data.model;
+      const timing = Number(data.processingMs) > 0 ? ` · ${(Number(data.processingMs) / 1000).toFixed(1)}s` : "";
+      aiModelName = (data.fallbackFrom ? `${data.model} fallback` : data.model) + timing;
       updateAiModelBadge();
     }
 
@@ -2069,16 +2216,22 @@ async function handleAiKcalMessage() {
   } catch (err) {
     console.error(err);
 
+    const timedOut = err?.name === "AbortError";
+
     state.aiChatHistory.push({
       role: "ai",
-      text: "ขอโทษครับ ตอนนี้ AI ยังตอบไม่ได้ ลองพิมพ์ใหม่ให้ชัดขึ้นอีกนิดนะครับ",
+      text: timedOut
+        ? "คำขอนี้ใช้เวลานานเกินไป ลองส่งอีกครั้งได้เลยครับ"
+        : "ขอโทษครับ ตอนนี้ AI ยังตอบไม่ได้ ลองพิมพ์ใหม่ให้ชัดขึ้นอีกนิดนะครับ",
       ts: Date.now()
     });
 
-    reply.textContent = "AI ยังตอบไม่ได้ ลองใหม่อีกครั้ง";
+    reply.textContent = timedOut ? "AI ใช้เวลานานเกินไป ลองส่งอีกครั้ง" : "AI ยังตอบไม่ได้ ลองใหม่อีกครั้ง";
     saveState();
     renderAiChatHistory();
   } finally {
+    progressTimersV13.forEach(clearTimeout);
+    clearTimeout(requestTimeoutV13);
     sendBtn.disabled = false;
   }
 }
@@ -4450,6 +4603,114 @@ function riskLabelTH(risk){
   return "ต่ำ";
 }
 
+function spikeRiskCodeV14(food){
+  const raw = String(food?.spikeRisk || food?.glucoseSpikeRisk || "").trim().toLowerCase();
+  if(raw === "high" || raw === "สูง") return "high";
+  if(raw === "medium" || raw === "กลาง") return "medium";
+  if(raw === "low" || raw === "ต่ำ") return "low";
+  return estimateGlucoseSpikeRisk(food || {});
+}
+
+function highSpikeReasonV14(food){
+  const carb = Math.round(toMacroNumber(food?.carb ?? food?.carbs ?? food?.carbohydrate));
+  const sugar = Math.round(toMacroNumber(food?.sugar));
+  const fiber = Math.round(toMacroNumber(food?.fiber));
+  const protein = Math.round(toMacroNumber(food?.protein));
+  const reasons = [];
+
+  if(sugar >= 25) reasons.push(`น้ำตาลค่อนข้างสูง ${sugar}g`);
+  if(carb >= 70) reasons.push(`แป้งค่อนข้างสูง ${carb}g`);
+  if(carb >= 50 && fiber < 3 && protein < 15){
+    reasons.push("แป้งสูงเมื่อเทียบกับไฟเบอร์และโปรตีน");
+  }
+  if(!reasons.length) reasons.push("AI ประเมินจากชนิดอาหารและสัดส่วนสารอาหาร");
+  return reasons.join(" · ");
+}
+
+function formatHighSpikeDateV14(dateStr){
+  const [year, month, day] = String(dateStr).split("-").map(Number);
+  if(!year || !month || !day) return String(dateStr || "");
+  return `${day} ${getThaiShortMonth(month - 1)} ${year + 543}`;
+}
+
+function highSpikeMealsFromRowsV14(rows){
+  return (Array.isArray(rows) ? rows : []).flatMap(row =>
+    (Array.isArray(row.food) ? row.food : [])
+      .filter(item => spikeRiskCodeV14(item) === "high")
+      .map((item, index) => ({
+        dateStr:row.dateStr,
+        index,
+        name:String(item?.name || "รายการอาหาร"),
+        carb:Math.round(toMacroNumber(item?.carb ?? item?.carbs ?? item?.carbohydrate)),
+        sugar:Math.round(toMacroNumber(item?.sugar)),
+        fiber:Math.round(toMacroNumber(item?.fiber)),
+        protein:Math.round(toMacroNumber(item?.protein)),
+        estimated:!!item?.metabolicEstimated,
+        reason:highSpikeReasonV14(item)
+      }))
+  ).sort((a,b) => b.dateStr.localeCompare(a.dateStr) || b.index - a.index);
+}
+
+function fitHighSpikeListToFourV15(list){
+  if(!list) return;
+  list.classList.remove("is-scrollable");
+  list.style.maxHeight = "";
+  list.scrollTop = 0;
+
+  const mealRows = Array.from(list.querySelectorAll(".high-spike-row"));
+  if(mealRows.length <= 4) return;
+
+  list.classList.add("is-scrollable");
+  const firstFour = mealRows.slice(0, 4);
+  const style = getComputedStyle(list);
+  const gap = Number.parseFloat(style.rowGap || style.gap) || 7;
+  const height = firstFour.reduce((sum, row) => sum + row.getBoundingClientRect().height, 0) + (gap * 3);
+  if(height > 0){
+    list.style.maxHeight = `${Math.ceil(height)}px`;
+  }
+}
+
+let highSpikeResizeTimerV15 = null;
+window.addEventListener("resize", () => {
+  clearTimeout(highSpikeResizeTimerV15);
+  highSpikeResizeTimerV15 = setTimeout(() => {
+    document.querySelectorAll(".high-spike-list").forEach(fitHighSpikeListToFourV15);
+  }, 120);
+});
+if(document.fonts?.ready){
+  document.fonts.ready.then(() => {
+    document.querySelectorAll(".high-spike-list").forEach(fitHighSpikeListToFourV15);
+  });
+}
+
+function renderHighSpikeMealListV14(container, meals){
+  if(!container) return;
+  const rows = Array.isArray(meals) ? meals : [];
+  if(!rows.length){
+    container.innerHTML = '<div class="high-spike-empty">ไม่มีรายการที่ถูกจัดว่าเสี่ยงสูงในช่วงนี้</div>';
+    return;
+  }
+
+  const listHtml = rows.map(item => `
+    <div class="high-spike-row">
+      <div class="high-spike-row-head">
+        <b>${escapeHtml(item.name)}</b>
+        <span>${formatHighSpikeDateV14(item.dateStr)}</span>
+      </div>
+      <div class="high-spike-macros">แป้ง ${item.carb}g · น้ำตาล ${item.sugar}g · ไฟเบอร์ ${item.fiber}g · โปรตีน ${item.protein}g</div>
+      <div class="high-spike-reason">เหตุผล: ${escapeHtml(item.reason)}${item.estimated ? " · ค่าจากระบบประเมิน" : ""}</div>
+    </div>
+  `).join("");
+
+  container.innerHTML = `
+    <div class="high-spike-title">รายการที่ระบบจัดว่าเสี่ยงสูง</div>
+    <div class="high-spike-explain">ประเมินจากแป้ง น้ำตาล ไฟเบอร์ และโปรตีน ไม่ใช่ผลตรวจน้ำตาลจริง</div>
+    <div class="high-spike-list">${listHtml}</div>
+    ${rows.length > 4 ? '<div class="high-spike-scroll-hint">เลื่อนในกล่องเพื่อดูรายการที่เหลือ</div>' : ""}
+  `;
+  fitHighSpikeListToFourV15(container.querySelector(".high-spike-list"));
+}
+
 
 function estimateFoodMetabolicFallback(food){
   const name = String(food?.name || "").toLowerCase();
@@ -4564,8 +4825,8 @@ function getTodayMetabolicTotals(dateStr = todayStr()){
   const totalSugar = food.reduce((sum, item) => sum + toMacroNumber(item.sugar), 0);
   const totalFiber = food.reduce((sum, item) => sum + toMacroNumber(item.fiber), 0);
 
-  const highCount = food.filter(item => (item.spikeRisk || estimateGlucoseSpikeRisk(item)) === "high").length;
-  const mediumCount = food.filter(item => (item.spikeRisk || estimateGlucoseSpikeRisk(item)) === "medium").length;
+  const highCount = food.filter(item => spikeRiskCodeV14(item) === "high").length;
+  const mediumCount = food.filter(item => spikeRiskCodeV14(item) === "medium").length;
 
   let dayRisk = "low";
   if(highCount >= 1 || totalSugar >= 35 || totalCarb >= 140) dayRisk = "high";
@@ -4616,6 +4877,7 @@ function ensureKcalInsulinInsightCard(){
     <div class="insulin-note" id="todayInsulinNote">
       ระบบประเมินจาก carb / sugar / fiber / protein ของรายการอาหาร ไม่ใช่การวัดน้ำตาลหรืออินซูลินจริง
     </div>
+    <div class="high-spike-details" id="todayHighSpikeMealDetails"></div>
   `;
 
   const dataTools = document.querySelector(".data-tools-card");
@@ -4639,6 +4901,7 @@ function renderKcalInsulinInsight(){
   const fiberEl = document.getElementById("todayFiberTotal");
   const pill = document.getElementById("todaySpikeRiskPill");
   const note = document.getElementById("todayInsulinNote");
+  const details = document.getElementById("todayHighSpikeMealDetails");
 
   if(carbEl) carbEl.textContent = `${Math.round(t.totalCarb)}g`;
   if(sugarEl) sugarEl.textContent = `${Math.round(t.totalSugar)}g`;
@@ -4660,6 +4923,11 @@ function renderKcalInsulinInsight(){
       note.textContent = "วันนี้ความเสี่ยงน้ำตาลพุ่งค่อนข้างต่ำ โดยดูจากข้อมูลที่มี โปรตีนและไฟเบอร์ช่วยให้มื้ออาหารนิ่งขึ้น";
     }
   }
+
+  renderHighSpikeMealListV14(details, highSpikeMealsFromRowsV14([{
+    dateStr:todayStr(),
+    food:t.food
+  }]));
 }
 
 function mountManualFoodMacroFields(){
@@ -4742,7 +5010,7 @@ function getMetabolicRows(){
     const totalCarb = food.reduce((sum, item) => sum + toMacroNumber(item.carb), 0);
     const totalSugar = food.reduce((sum, item) => sum + toMacroNumber(item.sugar), 0);
     const totalFiber = food.reduce((sum, item) => sum + toMacroNumber(item.fiber), 0);
-    const highCount = food.filter(item => (item.spikeRisk || estimateGlucoseSpikeRisk(item)) === "high").length;
+    const highCount = food.filter(item => spikeRiskCodeV14(item) === "high").length;
 
     if(food.length){
       rows.push({ dateStr, food, totalCarb, totalSugar, totalFiber, highCount });
@@ -4792,6 +5060,7 @@ function ensureDashboardInsulinInsightCard(){
     <div class="insulin-note" id="dashInsulinNote">
       ระบบประเมินแนวโน้มจากข้อมูลอาหาร ไม่ใช่ค่าทางการแพทย์
     </div>
+    <div class="high-spike-details" id="dashHighSpikeMealDetails"></div>
   `;
 
   const energyWrap = document.getElementById("energyDashboardWrap");
@@ -4821,6 +5090,8 @@ function renderDashboardInsulinInsight(){
   const sugarEl = document.getElementById("dashSugarTotal");
   const highEl = document.getElementById("dashHighSpikeMeals");
   const noteEl = document.getElementById("dashInsulinNote");
+  const detailsEl = document.getElementById("dashHighSpikeMealDetails");
+  const highMealRows = highSpikeMealsFromRowsV14(rows);
 
   if(carbEl) carbEl.textContent = `${Math.round(totalCarb)}g`;
   if(sugarEl) sugarEl.textContent = `${Math.round(totalSugar)}g`;
@@ -4835,6 +5106,8 @@ function renderDashboardInsulinInsight(){
       noteEl.textContent = `เดือนนี้มีข้อมูล ${foodDays} วัน แป้งรวมประมาณ ${Math.round(totalCarb)}g น้ำตาลรวมประมาณ ${Math.round(totalSugar)}g ไฟเบอร์รวมประมาณ ${Math.round(totalFiber)}g`;
     }
   }
+
+  renderHighSpikeMealListV14(detailsEl, highMealRows);
 }
 
 function refreshInsulinInsightUI(){
@@ -5741,9 +6014,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.30";
-const APP_BUILD_V1 = "2026.07.15.30";
-const APP_VERSION_NOTE_V1 = "Mobile layout fix · weight trends · backup restore";
+const APP_VERSION_V1 = "v1.6.31";
+const APP_BUILD_V1 = "2026.07.15.31";
+const APP_VERSION_NOTE_V1 = "Faster app-aware AI and scrollable high-risk meal details";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
