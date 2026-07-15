@@ -8,9 +8,16 @@ Live app: https://poroboy.github.io/milestone-tracker/
 
 Current app version shown in the home page:
 
-- Version: v1.6.29
-- Build: 2026.07.15.29
-- Notes: Adds weight trend analytics, in-page weight editing, backup restore, and clearer Cloud status
+- Version: v1.6.30
+- Build: 2026.07.15.30
+- Notes: Fixes mobile overflow in the version badge and four-button bottom navigation
+
+## Release v1.6.30
+
+- Allows Build and release-note text to wrap inside narrow mobile screens
+- Keeps all four bottom navigation buttons within the viewport at equal widths
+- Adds safe-area-aware horizontal padding for mobile browser and installed PWA layouts
+- Preserves all v1.6.29 features and uses the same Firestore data without migration
 
 ## Release v1.6.29
 
@@ -154,7 +161,9 @@ As the app grows, the next recommended refactor is to split the project into:
 
 ## Backup / Stable Version
 
-Current release tag: `v1.6.29`
+Current release tag: `v1.6.30`
+
+Previous release tag: `v1.6.29`
 
 Earlier stable tag: `stable-ai-dashboard-v1`
 

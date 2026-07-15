@@ -1,9 +1,9 @@
 /*
   Milestone Tracker
   App CSS extracted from index.html
-  Version: v1.6.26
-  Build: 2026.06.21.26
-  Notes: Improve AI food macro and glucose insight fields
+  Version: v1.6.30
+  Build: 2026.07.15.30
+  Notes: Keep the version badge and bottom navigation inside mobile screens
 */
 
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
@@ -24,7 +24,11 @@
   }
 
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;}
+  html,body{
+    margin:0;
+    max-width:100%;
+    overflow-x:hidden;
+  }
   body{
     font-family:'Prompt',sans-serif;
     background:var(--paper);
@@ -349,19 +353,27 @@
   /* ---- Bottom nav ---- */
   .tabbar{
     position:fixed; bottom:0; left:0; right:0;
+    width:100%;
+    max-width:100vw;
     background:var(--card);
     border-top:1px solid #e8e1d4;
     display:flex;
-    padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+    padding:8px calc(6px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
+    overflow:hidden;
     z-index:50;
   }
   .tab{
-    flex:1;
+    flex:1 1 25%;
+    width:25%;
+    min-width:0;
     display:flex; flex-direction:column; align-items:center; gap:4px;
     padding:6px 0;
     background:none; border:none;
     font-family:'Prompt',sans-serif;
-    font-size:11px; font-weight:600;
+    font-size:10.5px; font-weight:600;
+    line-height:1.2;
+    white-space:nowrap;
+    overflow:hidden;
     color:var(--muted);
     cursor:pointer;
   }
@@ -2514,6 +2526,7 @@
   }
   .app-version-badge .version-main{
     display:flex;
+    min-width:0;
     flex-direction:column;
     gap:2px;
   }
@@ -2528,16 +2541,27 @@
     color:var(--ink);
   }
   .app-version-badge .version-build{
+    min-width:0;
+    max-width:100%;
     font-family:'DM Mono',monospace;
     font-size:10px;
     color:var(--muted);
     text-align:right;
-    white-space:nowrap;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    line-height:1.45;
   }
   @media(max-width:430px){
     .app-version-badge{
       width:calc(100% - 24px);
       margin-top:6px;
+      align-items:flex-start;
+      flex-direction:column;
+      gap:6px;
+    }
+    .app-version-badge .version-build{
+      width:100%;
+      text-align:left;
     }
   }
 
