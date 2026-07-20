@@ -56,6 +56,15 @@ function isValidAiJson(parsed) {
     && Array.isArray(parsed.suggestions);
 }
 
+function isValidPixelSecretaryJson(parsed) {
+  return parsed
+    && typeof parsed === "object"
+    && typeof parsed.reply === "string"
+    && typeof parsed.intent === "string"
+    && (!parsed.plan || Array.isArray(parsed.plan))
+    && (!parsed.actions || Array.isArray(parsed.actions));
+}
+
 
 function toMacroNumber(value) {
   const n = Number(value);
@@ -172,7 +181,7 @@ function normalizeMetabolicItems(parsed) {
 }
 
 
-async function callGeminiModel(model, prompt, env) {
+async function callGeminiModel(model, prompt, env, validatorFn) {
   const startedAt = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -250,7 +259,7 @@ async function callGeminiModel(model, prompt, env) {
   try {
     const parsed = JSON.parse(cleanJsonText(rawText));
 
-    if (!isValidAiJson(parsed)) {
+    if (!(validatorFn || isValidAiJson)(parsed)) {
       return {
         ok: false,
         model,
@@ -289,12 +298,12 @@ async function callGeminiModel(model, prompt, env) {
   }
 }
 
-async function callGeminiWithFallback(prompt, env) {
+async function callGeminiWithFallback(prompt, env, validatorFn) {
   const startedAt = Date.now();
   const triedModels = [];
 
   for (const model of MODEL_PRIORITY) {
-    const result = await callGeminiModel(model, prompt, env);
+    const result = await callGeminiModel(model, prompt, env, validatorFn);
 
     triedModels.push({
       model,
@@ -386,6 +395,248 @@ function normalizeAiItemsMacroFieldsV1(items) {
   return items.map((item) => normalizeFoodMacroFieldsV1(item));
 }
 
+async function handlePixelSecretary(request, env) {
+  const origin = request.headers.get("Origin") || "";
+
+  try {
+    const body = await request.json();
+
+    const message = String(body.message || "").trim();
+    const time = body.time || {};
+    const activePage = body.activePage || "unknown";
+    const user = body.user || {};
+    const today = body.today || {};
+    const analytics = body.analytics || {};
+    const weightLogs = Array.isArray(body.weightLogs) ? body.weightLogs : [];
+    const foodHistory = Array.isArray(body.foodHistory) ? body.foodHistory : [];
+    const exerciseHistory = Array.isArray(body.exerciseHistory) ? body.exerciseHistory : [];
+    const availableFunctions = Array.isArray(body.availableFunctions) ? body.availableFunctions : [];
+    const chatHistory = Array.isArray(body.chatHistory) ? body.chatHistory.slice(-10) : [];
+    const contextVersion = body.contextVersion || 1;
+
+    if (!message) {
+      return new Response(JSON.stringify({ error: "Message is required" }), {
+        status: 400,
+        headers: corsHeaders(origin)
+      });
+    }
+
+    const hasAnalytics = Object.keys(analytics).length > 0;
+    const hasWeightLogs = weightLogs.length > 0;
+    const hasFoodHistory = foodHistory.length > 0;
+    const hasExerciseHistory = exerciseHistory.length > 0;
+
+    const prompt = `
+You are Pixel Secretary — an AI agent embedded inside the Milestone Tracker application. You are NOT a generic chatbot. You operate within the app, with live access to the user's health data, goals, history, and activity.
+
+=== YOUR CAPABILITIES ===
+You can perform operations through these available functions:
+${JSON.stringify(availableFunctions)}
+
+=== LIVE APPLICATION CONTEXT ===
+Context version: ${contextVersion}
+
+⏰ Time & Place
+- Date: ${time.displayDate || "unknown"}
+- Time: ${time.displayTime || "unknown"} (${time.timezone || "unknown"})
+- Weekday: ${time.weekday || "unknown"}
+- Day part: ${time.dayPart || "unknown"}
+- Active page: ${activePage}
+
+👤 User Profile
+- Gender: ${(user.profile && user.profile.gender) || "not set"}
+- Age: ${(user.profile && user.profile.age) || "not set"}
+- Height: ${(user.profile && user.profile.heightCm) || "not set"} cm
+- Activity level: ${(user.profile && user.profile.activityLevel) || "not set"}
+- Body metrics: ${JSON.stringify(user.metrics || {})}
+
+🎯 Goals
+- Start weight: ${user.startWeight || "unknown"} kg
+- Current weight: ${user.currentWeight || "unknown"} kg
+- Final goal: ${user.finalGoal || "unknown"} kg
+- Protein goal: ${user.proteinGoal || 0} g/day
+- Current streak: ${user.streak || 0} days
+- Best streak: ${user.bestStreak || 0} days
+
+📅 Today (${today.date || "unknown"})
+- Base kcal / TDEE: ${today.baseKcal || 0}
+- Food kcal: ${today.foodKcal || 0}
+- Exercise kcal: ${today.exerciseKcal || 0}
+- Net kcal: ${today.netKcal || 0}
+- Protein: ${today.protein || 0} g
+- Food log: ${JSON.stringify(today.foods || [])}
+- Exercise log: ${JSON.stringify(today.exercises || [])}
+${hasAnalytics ? `
+📊 App Analytics (derived from recorded data)
+${JSON.stringify(analytics, null, 2)}
+` : ""}${hasWeightLogs ? `
+⚖️ Weight History (${weightLogs.length} records)
+${JSON.stringify(weightLogs.slice(-20))}
+` : ""}${hasFoodHistory ? `
+📜 Food History (past 30 days)
+${JSON.stringify(foodHistory)}
+` : ""}${hasExerciseHistory ? `
+🏃 Exercise History (past 30 days)
+${JSON.stringify(exerciseHistory)}
+` : ""}
+💬 Recent Chat History
+${JSON.stringify(chatHistory)}
+
+=== YOUR RULES ===
+- Always use the LIVE CONTEXT above to answer. Do not rely on general knowledge or assumptions.
+- Analyze the user's message and determine the best response and/or actions.
+- For write operations (logging food, weight, exercise), include the function name and params in actions[].
+- For read-only requests (questions, analytics, navigation), set actions to [].
+- If intent is unclear, set intent to "clarify" and ask a follow-up question.
+- Always reply in Thai, short and natural.
+- Do not invent data not present in the context.
+- Do not give medical diagnosis or treatment advice.
+- For exercise: if user mentions duration, estimate kcal automatically using these guides:
+  - Walking 30 min ≈ 110 kcal, 60 min ≈ 220 kcal
+  - Cardio 20 min ≈ 150 kcal, 30 min ≈ 220 kcal, 60 min ≈ 450 kcal
+  - Running/Jogging 30 min ≈ 300 kcal
+  - Cycling 30 min ≈ 250 kcal
+  - Swimming 30 min ≈ 250 kcal
+  - Weight training 30 min ≈ 150 kcal
+  - Yoga/Stretching 30 min ≈ 100 kcal
+  - Default: 5 kcal per minute
+
+=== OUTPUT FORMAT ===
+Respond with ONLY valid JSON. No markdown, no code fences, no extra text.
+
+Required JSON structure:
+{
+  "intent": "one of: log_food, log_weight, log_exercise, navigate, chat, clarify, mixed",
+  "reply": "short Thai reply explaining what was done or answering the question",
+  "plan": [ { "step": "action_id", "label": "Thai label" } ],
+  "actions": [ { "function": "fn_name", "params": {}, "label": "Thai label" } ]
+}
+- plan MUST always be an array (use [] if none)
+- actions MUST always be an array (use [] if none)
+
+Examples:
+
+User: วันนี้กินข้าวมันไก่
+JSON:
+{
+  "intent": "log_food",
+  "reply": "รับทราบค่ะ จะบันทึกข้าวมันไก่ 550 kcal ให้คุณ",
+  "plan": [ { "step": "addMeal", "label": "บันทึกข้าวมันไก่" } ],
+  "actions": [ { "function": "addMeal", "params": { "name": "ข้าวมันไก่", "kcal": 550, "protein": 25 }, "label": "บันทึกมื้ออาหาร" } ]
+}
+
+User: วันนี้หนัก 72.3
+JSON:
+{
+  "intent": "log_weight",
+  "reply": "บันทึกน้ำหนัก 72.3 kg ให้เรียบร้อยค่ะ",
+  "plan": [ { "step": "updateWeight", "label": "บันทึกน้ำหนัก" } ],
+  "actions": [ { "function": "updateWeight", "params": { "weight": 72.3 }, "label": "บันทึกน้ำหนัก" } ]
+}
+
+User: เดิน 30 นาที
+JSON:
+{
+  "intent": "log_exercise",
+  "reply": "บันทึกการเดิน 30 นาที เผาผลาญประมาณ 110 kcal ให้เรียบร้อยค่ะ",
+  "plan": [ { "step": "addExercise", "label": "บันทึกการออกกำลังกาย" } ],
+  "actions": [ { "function": "addExercise", "params": { "name": "เดิน", "durationMinutes": 30, "kcal": 110 }, "label": "บันทึกกิจกรรม" } ]
+}
+
+User: Cardio 20 นาที
+JSON:
+{
+  "intent": "log_exercise",
+  "reply": "บันทึก Cardio 20 นาที เผาผลาญประมาณ 150 kcal ให้เรียบร้อยค่ะ",
+  "plan": [ { "step": "addExercise", "label": "บันทึกการออกกำลังกาย" } ],
+  "actions": [ { "function": "addExercise", "params": { "name": "Cardio", "durationMinutes": 20, "kcal": 150 }, "label": "บันทึกกิจกรรม" } ]
+}
+
+User: เปิด Dashboard
+JSON:
+{
+  "intent": "navigate",
+  "reply": "กำลังเปิด Dashboard ให้คุณค่ะ",
+  "plan": [ { "step": "navigate", "label": "เปิด Dashboard" } ],
+  "actions": [ { "function": "navigate", "params": { "page": "Dashboard" }, "label": "เปลี่ยนหน้า" } ]
+}
+
+User: ทำไมน้ำหนักไม่ลง
+JSON:
+{
+  "intent": "chat",
+  "reply": "จากข้อมูลที่บันทึกไว้ น้ำหนักของคุณมีความผันผวน แต่อยู่ในช่วงที่ค่อนข้างคงที่ อาจต้องดู kcal โดยรวมและโปรตีนให้เพียงพอด้วยค่ะ ต้องการให้วิเคราะห์เพิ่มเติมไหมคะ?",
+  "plan": [],
+  "actions": []
+}
+
+User message:
+${message}
+`;
+
+    const fallbackResult = await callGeminiWithFallback(prompt, env, isValidPixelSecretaryJson);
+
+    if (!fallbackResult.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "Gemini API error",
+          detail: fallbackResult.detail
+        }),
+        {
+          status: 500,
+          headers: corsHeaders(origin)
+        }
+      );
+    }
+
+    const parsed = fallbackResult.parsed;
+
+    if (!isValidPixelSecretaryJson(parsed)) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid AI response",
+          detail: {
+            error: {
+              status: "INVALID_AI_JSON_STRUCTURE",
+              message: "AI returned JSON but structure does not match the Pixel Secretary schema"
+            },
+            raw: parsed
+          }
+        }),
+        {
+          status: 502,
+          headers: corsHeaders(origin)
+        }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        intent: parsed.intent,
+        reply: parsed.reply,
+        plan: parsed.plan || [],
+        actions: parsed.actions || [],
+        model: fallbackResult.model,
+        fallbackFrom: fallbackResult.fallbackFrom,
+        processingMs: fallbackResult.processingMs,
+        triedModels: fallbackResult.triedModels
+      }),
+      { headers: corsHeaders(origin) }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: "Worker error",
+        detail: String(err?.message || err)
+      }),
+      {
+        status: 500,
+        headers: corsHeaders(origin)
+      }
+    );
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -399,6 +650,11 @@ export default {
         status: 405,
         headers: corsHeaders(origin)
       });
+    }
+
+    const url = new URL(request.url);
+    if (url.pathname === "/pixel-secretary") {
+      return handlePixelSecretary(request, env);
     }
 
     try {

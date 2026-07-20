@@ -1,195 +1,289 @@
 # Milestone Tracker
 
-Personal health and milestone tracking web app with cloud sync, kcal/protein logging, AI health chat, and dashboard analytics.
+Personal health and milestone tracking web app with cloud sync, calorie/protein logging,
+dashboard analytics, and **Pixel Secretary** — an AI health assistant embedded inside the
+application.
 
-Live app: https://poroboy.github.io/milestone-tracker/
+**Live app:** https://poroboy.github.io/milestone-tracker/
 
-## Current App Version
+---
 
-Current app version shown in the home page:
+## Version
 
-- Version: v1.6.31
-- Build: 2026.07.15.31
-- Notes: Adds faster app-aware AI and keeps high-risk meal details in a compact scrollable list
+| Field | Value |
+|-------|-------|
+| Version | v1.7.0 |
+| Build | 2026.07.20.1 |
+| Release | Pixel Secretary — AI health assistant with Live Context, Intent Resolution, and function calling |
 
-## Release v1.6.31
+---
 
-- Sends compact pre-calculated 7, 30, and 90-day app summaries to AI instead of the full database
-- Lets AI answer questions about recorded weight direction, weekly pace, kcal balance, protein, goals, and data coverage
-- Distinguishes recorded weight from app-estimated weight in the analytics context
-- Sends profile metrics and Bangkok date/time context that the Worker already supports
-- Shows clearer progress and request-timeout messages while AI is working
-- Uses a low-latency model first and keeps larger models as fallbacks
-- Keeps the same Firestore paths and does not change or migrate saved user data
-- Lists the date, food name, estimated macros, and reason for every high-risk meal on the kcal and dashboard insights
-- Keeps four high-risk meals visible and scrolls the remaining meals inside the card
-- Normalizes Thai and English risk labels so older food records appear consistently
+## Features
 
-## Release v1.6.30
+### Pixel Secretary AI
 
-- Allows Build and release-note text to wrap inside narrow mobile screens
-- Keeps all four bottom navigation buttons within the viewport at equal widths
-- Adds safe-area-aware horizontal padding for mobile browser and installed PWA layouts
-- Preserves all v1.6.29 features and uses the same Firestore data without migration
+An AI health assistant embedded inside the app. It understands the app's current state,
+can answer questions, and can perform actions through a function registry:
 
-## Release v1.6.29
+- **Natural language food logging** — "กินข้าวมันไก่" → logs with estimated kcal/protein
+- **Natural language weight logging** — "วันนี้หนัก 72.3" → records weight
+- **Natural language exercise logging** — "เดิน 30 นาที" → logs with kcal estimation
+- **Natural language navigation** — "เปิด Dashboard" → switches tab
+- **Health analytics** — "ทำไมน้ำหนักไม่ลง" → analyzes trends from live data
+- **Confirmation flow** — write operations require user confirmation before execution
 
-- Adds a predicted-vs-recorded weight chart with exact values on tap or click
-- Adds 30-day, 90-day, and yearly chart ranges with a 7-day moving average
-- Adds short-term weight pace and plateau analysis
-- Adds in-page editing and deletion for recorded weight history
-- Adds validated JSON Import / Restore alongside the existing Export Data backup
-- Adds a readable Cloud status panel for online, offline, pending, successful, and failed sync states
-- Keeps the existing Firestore paths and data format; no data migration or reset is required
+See [Pixel Secretary Architecture](#pixel-secretary-architecture) below.
 
-## Current Features
+### Daily Calorie & Protein Tracker
 
-### Account & Cloud Sync
-- Google login with Firebase Authentication
-- Firestore cloud sync per user
-- Cross-device Firestore sync with merge protection
-- Manual Sync Now button
-- Automatic sync after save and app focus
-- Clear online/offline, pending-change, and last-successful-sync status
-- Split per-day Firestore sync to avoid 1MB document limit
-- Local state plus cloud backup behavior
+- Food logging with kcal and protein
+- Exercise logging with kcal burn
+- Daily base kcal / TDEE
+- Net kcal calculation (food - exercise - base)
+- Daily protein goal tracking
+- Monthly summaries
 
-### Kcal & Protein Tracker
-- Daily kcal tracking
-- Manual food log
-- Manual exercise log
-- Protein tracking per food item
-- Daily protein goal
-- Monthly kcal summary
-- Daily history by selected month
+### Weight Tracking
 
-### Glucose / Insulin Insight
-- Estimates carb, sugar, and fiber for food logs
-- Shows daily carb and sugar insight on the kcal page
-- Shows monthly glucose spike risk summary on the dashboard
-- Uses estimated glucose spike risk: low, medium, or high
-- This is not a medical insulin or blood glucose measurement
-
-### AI Health Chat
-- AI chat for food, kcal, protein, workout, and health suggestions
-- Auto log food and exercise from natural language
-- Estimates kcal and protein from Thai food portions
-- Prevents duplicate logging when the user mentions an item as context
-- Shows active AI model in chat
-- Sends current date/time context to AI for more relevant suggestions
-
-### AI Model Fallback
-
-AI is powered by a Cloudflare Worker connected to Gemini API.
-
-Model priority:
-1. gemini-3.5-flash
-2. gemini-2.5-flash
-3. gemini-2.5-flash-lite
-
-If the first model is unavailable or in high demand, the Worker automatically falls back to the next model.
-
-### Energy Analytics
-- Total kcal consumed
-- Total kcal burned from base kcal plus exercise
-- Accumulated kcal deficit or surplus
-- Estimated fat loss using 7,700 kcal per 1 kg as an approximation
-- Remaining kcal to the next estimated 1 kg milestone
-- Daily, monthly, and yearly kcal chart comparing food intake vs total burn
+- Weight logging with history
+- Predicted vs recorded weight chart
+- 7-day moving average
+- 30-day, 90-day, and yearly chart ranges
+- Pace and plateau analysis
+- Editable and removable history entries
 
 ### Dashboard
-- Yearly dashboard
-- Monthly kcal trend
-- Monthly protein trend
-- Daily history by selected month
-- Weight history
-- Predicted vs recorded weight trend chart for the selected year
-- Tappable chart points showing the date, exact weight, and same-day difference
-- 30-day, 90-day, and yearly weight chart ranges
-- 7-day average weight line and 1–4 week pace/plateau analysis
-- Editable and removable weight history entries
-- Automatic direction summary: aligned, unclear, or moving in opposite directions
-- Dashboard weight recorder linked to current weight and weight history
-- Health progress insight
-- Body profile fields:
-  - gender
-  - age
-  - current weight
-  - height
-  - baseline activity
+
+- Yearly overview
+- Monthly kcal and protein trends
+- Weight trend chart
+- Health progress insights
+- Body profile (gender, age, weight, height, activity)
 - Estimated BMI, BMR, TDEE, and protein target
 
-### Data Management
-- Export all app data as a JSON backup file
-- Import and restore a JSON backup after validation and confirmation
-- Delete individual food and exercise entries for today
-- Reset today's food and exercise logs while preserving base kcal
+### Random Meal Wheel
 
-### Realtime Context
-- Shows current local date and time
-- Uses Asia/Bangkok time context
-- AI receives time/day-part context for better meal and activity suggestions
+- Random meal suggestion spinner
+- Configurable food list
+
+### Glucose / Insulin Insight
+
+- Estimated carb, sugar, and fiber for food logs
+- Daily carb and sugar totals
+- Glucose spike risk estimation (low/medium/high)
+- *Not a medical measurement*
+
+### Account & Cloud Sync
+
+- Google login with Firebase Authentication
+- Firestore cloud sync per user
+- Cross-device merge protection
+- Split per-day sync (avoids 1MB document limit)
+- Online/offline/pending sync status
+
+### Data Management
+
+- Export all data as JSON backup
+- Import and restore from validated JSON
+- Delete individual food/exercise entries
+- Reset today's logs
+
+---
+
+## Pixel Secretary Architecture
+
+```
+User Message
+    ↓
+Intent Resolution (detectIntents)
+    ↓  regex-based, 6 intents, deterministic
+Context Builder (buildPixelContext)
+    ↓  core + matched providers
+Cloudflare Worker
+    ↓  prompt assembly + Gemini call
+Gemini API
+    ↓  structured JSON response
+Function Calling
+    ↓  validate → confirm → execute
+State Update
+    ↓  saveState → re-render → sync
+```
+
+### Live Context System
+
+Before sending to Gemini, the frontend builds a complete snapshot of the app's current
+state. This is split into two layers:
+
+**Layer 1 — Core Context (always included)**
+- Date/time/timezone (Asia/Bangkok)
+- Active page
+- User profile, BMI, BMR, TDEE
+- Goals (start/current/final weight, protein goal, streak)
+- Today's kcal summary, food log, exercise log
+- Available function names
+
+**Layer 2 — Context Providers (selected by intent)**
+- `chatHistory` — always included
+- `weightHistory` — weight-related intents
+- `analytics` — analysis/trend intents
+- `foodHistory` — food/nutrition history intents
+- `exerciseHistory` — exercise history intents
+
+### Intent Resolution
+
+Uses regex patterns (not substring matching) to detect what the user wants:
+
+| Intent | Example trigger | Activated by |
+|--------|----------------|--------------|
+| weight | "ทำไมไม่ผอม" | น้ำหนัก, ลด, ผอม, plateau, ไม่ลง |
+| nutrition | "วันนี้กินอะไรดี" | กิน, อาหาร, แคล, มื้อ |
+| exercise | "เดินทุกวัน" | วิ่ง, เดิน, cardio, ออกกำลัง |
+| analytics | "ช่วงนี้ลดไม่ค่อยลง" | ทำไม, ช่วงนี้, แนวโน้ม, เดือน |
+| time | "ตอนนี้กี่โมง" | เวลา, กี่โมง, วันอะไร |
+| greeting | "สวัสดี" | สวัสดี, hello, ขอบคุณ |
+
+Multiple intents can activate simultaneously. Providers are deduplicated.
+
+### Context Providers
+
+Independent modules with a single `build()` function. Adding a new provider requires
+no changes to the selection logic.
+
+### Function Registry
+
+Four functions, each with `validate()` and `execute()`:
+
+| Function | Confirmation | Purpose |
+|----------|-------------|---------|
+| addMeal | Yes | Log a meal (name, kcal, protein) |
+| updateWeight | Yes | Record weight |
+| addExercise | Yes | Log exercise (name, duration, kcal) |
+| navigate | No | Switch tab/page |
+
+Write operations show a confirmation dialog before execution.
+
+### Worker
+
+The Cloudflare Worker at `worker/src/index.js`:
+
+- Receives the full context payload from the frontend
+- Assembles a system prompt with live context
+- Calls Gemini API with model fallback (gemini-2.5-flash-pro → gemini-2.5-flash → gemini-2.5-flash-lite)
+- Validates the JSON response against the required schema
+- Returns structured JSON to the frontend
+
+The Worker is **stateless** — all user state lives on the frontend.
+
+---
 
 ## Tech Stack
 
-- HTML / CSS / JavaScript
-- Firebase Authentication
-- Firebase Firestore
-- GitHub Pages
-- Cloudflare Workers
-- Gemini API
+| Layer | Technology |
+|-------|-----------|
+| Frontend | HTML / CSS / JavaScript (vanilla, no framework) |
+| Hosting | GitHub Pages |
+| Authentication | Firebase Authentication |
+| Database | Firebase Firestore |
+| AI Backend | Cloudflare Workers |
+| AI Model | Google Gemini API (with model fallback) |
 
-## Important Data Notes
+---
 
-The app stores user data in Firestore under a user-specific path.
+## Project Structure
 
-Do not change the Firestore data path unless a migration plan is prepared.
+```
+milestone-tracker/
+├── index.html                 # Main application (UI, state, sync, Pixel Secretary)
+├── styles.css                 # All styles
+├── manifest.webmanifest       # PWA manifest
+├── service-worker.js          # Offline service worker
+├── icon-192.png               # PWA icon
+├── icon-512.png               # PWA icon
+├── worker/
+│   ├── package.json           # Worker dependencies
+│   ├── wrangler.toml          # Cloudflare configuration
+│   └── src/
+│       └── index.js           # Worker — Gemini proxy + prompt assembly
+├── README.md                  # This file
+├── CHANGELOG.md               # Release history
+├── PROJECT_CONTEXT.md         # AI handoff document
+├── AI_Pixel_Secretary_Vision.md           # Original specification (historical)
+├── AI_Pixel_Secretary_Implementation_Plan.md  # Implementation plan (historical)
+├── .firebaserc                # Firebase project config
+├── firebase.json              # Firebase hosting config
+└── firestore.rules            # Firestore security rules
+```
 
-Important data fields include:
-- kcalDays
-- proteinGoal
-- weightLogs
-- profile
-- aiChatHistory
+---
 
-## Development Notes
+## Development
 
-This project is a static GitHub Pages app. The main app logic is still in `index.html`, while styling and install/offline support are split into:
-- `styles.css`
-- `manifest.webmanifest`
-- `service-worker.js`
-- `icon-192.png`
-- `icon-512.png`
+### Prerequisites
 
-AI chat is handled by the Cloudflare Worker in `worker/src/index.js`.
+- Node.js (for Worker deployment)
+- Cloudflare Wrangler CLI (`npm install -g wrangler`)
+- Gemini API key set as a Wrangler secret: `npx wrangler secret put GEMINI_API_KEY`
 
-As the app grows, the next recommended refactor is to split the project into:
-- index.html
-- styles.css
-- app.js
-- firebase.js
-- kcal.js
-- dashboard.js
-- ai.js
+### Local Development
 
-## Backup / Stable Version
+The frontend is a static HTML site — open `index.html` in a browser or serve locally:
 
-Current release tag: `v1.6.30`
+```bash
+npx http-server .
+```
 
-Previous release tag: `v1.6.29`
+### Worker Deployment
 
-Earlier stable tag: `stable-ai-dashboard-v1`
+After making changes to `worker/src/index.js`:
 
-To inspect this stable version:
+```bash
+cd worker
+npx wrangler deploy
+```
 
-    git checkout stable-ai-dashboard-v1
+### Adding a New Context Provider
 
-To return to main branch after inspecting:
+1. Add a `build()` function that returns `{ fieldName: data }`
+2. Add an entry to `contextProviders[]` in `index.html`
+3. Add an intent pattern if needed in `intentPatterns[]`
+4. (Optional) Add extraction and a conditional section in the Worker prompt
 
-    git checkout main
+### Adding a New Function
+
+1. Add an entry to `PixelFunctionRegistry` with `requiresConfirmation`, `validate()`, `execute()`
+2. Add the function name to the prompt examples in the Worker
+
+---
 
 ## Security Notes
 
-Do not commit API keys or secrets.
+- Do not commit API keys or secrets
+- The Gemini API key is stored as a Cloudflare Wrangler secret, not in source code
+- Firestore security rules control per-user data access
+- All user data is scoped to the authenticated user's UID
 
-Gemini API key should be stored as a Cloudflare Wrangler secret, not inside source code.
+---
+
+## Important Data Notes
+
+The app stores user data in Firestore under a user-specific path. Do not change
+the Firestore data path unless a migration plan is prepared.
+
+Key data fields:
+- `kcalDays` — daily food/exercise logs
+- `proteinGoal` — daily protein target
+- `weightLogs` — weight history
+- `profile` — user body profile
+- `aiChatHistory` — AI chat history
+- `pixelState` — Pixel Secretary state
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+
+## Project Context
+
+See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the AI handoff document with
+architecture details, development principles, and working rules.

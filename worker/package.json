@@ -1,6 +1,6 @@
 {
   "name": "milestone-kcal-ai",
-  "version": "1.6.31",
+  "version": "1.7.0",
   "type": "module",
   "private": true,
   "scripts": {
