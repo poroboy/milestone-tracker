@@ -450,6 +450,31 @@
 </div>
 </div>
 
+<!-- ====== PAGE: PIXEL SECRETARY ====== -->
+<div class="page" id="pagePixel">
+<div class="wrap">
+
+  <div id="pixelSecretary">
+    <div id="pixelStatus">
+      <span id="pixelStatusIcon">🧑</span>
+      <span id="pixelStatusLabel">พร้อมทำงาน</span>
+    </div>
+    <div id="pixelActivityLog"></div>
+    <div id="pixelDialogue"></div>
+    <div id="pixelInputArea">
+      <input type="text" id="pixelInput" placeholder="พิมพ์ข้อความ..." />
+      <button id="pixelSendBtn">ส่ง</button>
+    </div>
+    <div id="pixelActions">
+      <button onclick="pixelAction('clear')">ล้าง</button>
+      <button onclick="pixelAction('help')">ช่วยเหลือ</button>
+    </div>
+  </div>
+
+  <div style="height:80px;"></div>
+</div>
+</div>
+
 <div class="tabbar">
   <button class="tab active" id="tabHome" onclick="switchTab('Home')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -482,6 +507,13 @@
       <path d="M7 15l3-3 3 2 5-7"/>
     </svg>
     dashboard
+  </button>
+  <button class="tab" id="tabPixel" onclick="switchTab('Pixel')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 6v6l4 2"/>
+    </svg>
+    Pixel
   </button>
 
 </div>
@@ -3792,6 +3824,560 @@ switchTab = function(name){
   if(name === "Dashboard") renderDashboard();
 };
 
+const __oldSwitchTabForPixel = switchTab;
+switchTab = function(name){
+  __oldSwitchTabForPixel(name);
+  if(name === "Pixel") renderPixelSecretary();
+};
+
+// ============================================================
+// PIXEL SECRETARY — State
+// ============================================================
+const pixelState = {
+  status: 'idle',
+  dialogue: [],
+  activityLog: [],
+  chatHistory: [],
+};
+
+function setPixelStatus(status) {
+  const icons = { idle: '\u{1F9D1}', thinking: '\u23F3', done: '\u2705', error: '\u274C' };
+  const labels = { idle: 'พร้อมทำงาน', thinking: 'กำลังคิด...', done: 'เสร็จเรียบร้อย', error: 'เกิดข้อผิดพลาด' };
+  pixelState.status = status;
+  const iconEl = document.getElementById('pixelStatusIcon');
+  const labelEl = document.getElementById('pixelStatusLabel');
+  if (iconEl) iconEl.textContent = icons[status] || '\u{1F9D1}';
+  if (labelEl) labelEl.textContent = labels[status] || '';
+}
+
+function startActivity(step, label) {
+  pixelState.activityLog.push({ step, status: 'pending', label });
+  renderActivityLog();
+}
+function completeActivity(step) {
+  const entry = pixelState.activityLog.find(e => e.step === step);
+  if (entry) { entry.status = 'done'; renderActivityLog(); }
+}
+function failActivity(step) {
+  const entry = pixelState.activityLog.find(e => e.step === step);
+  if (entry) { entry.status = 'error'; renderActivityLog(); }
+}
+function clearActivity() {
+  pixelState.activityLog = [];
+  renderActivityLog();
+}
+function renderActivityLog() {
+  const el = document.getElementById('pixelActivityLog');
+  if (!el) return;
+  if (pixelState.activityLog.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = pixelState.activityLog.map(e =>
+    `<div class="pixel-log-entry ${e.status === 'done' ? 'is-done' : e.status === 'error' ? 'is-error' : ''}">${
+      e.status === 'pending' ? '\u23F3' : e.status === 'done' ? '\u2705' : '\u274C'
+    } ${e.label}</div>`
+  ).join('');
+}
+
+function addDialogue(entry) {
+  pixelState.dialogue.push(entry);
+  renderDialogue();
+}
+function renderDialogue() {
+  const el = document.getElementById('pixelDialogue');
+  if (!el) return;
+  el.innerHTML = pixelState.dialogue.map(msg => {
+    if (msg.type === 'confirm') {
+      const items = (msg.actions || []).map(a => {
+        const p = a.params;
+        return p.name ? `\uD83D\uDCDD ${p.name}${p.kcal ? ` (${p.kcal} kcal)` : ''}${p.protein ? ` / ${p.protein}g protein` : ''}` :
+               p.weight ? `\uD83D\uDCCB ${p.weight} kg` :
+               p.page ? `\uD83D\uDD17 เปิด ${p.page}` : '';
+      }).filter(Boolean).map(h => `<div style="font-size:12px;color:var(--muted);margin-top:4px;">${h}</div>`).join('');
+      return `<div class="pixel-msg is-confirm">
+        <div>${msg.text}</div>
+        ${items ? items : ''}
+        <div class="pixel-confirm-btns">
+          <button class="pixel-confirm-yes" onclick="confirmPixelAction(true)">\u2705 ยืนยัน</button>
+          <button class="pixel-confirm-no" onclick="confirmPixelAction(false)">\u274C ยกเลิก</button>
+        </div>
+      </div>`;
+    }
+    const roleClass = msg.role === 'user' ? 'is-user' : msg.type === 'error' ? 'is-error' : 'is-pixel';
+    return `<div class="pixel-msg ${roleClass}">${msg.text}</div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+let pixelPendingResolve = null;
+
+function showConfirmation(action, params) {
+  return new Promise(resolve => {
+    pixelPendingResolve = resolve;
+    addDialogue({
+      role: 'pixel',
+      type: 'confirm',
+      text: 'ต้องการบันทึกข้อมูลต่อไปนี้หรือไม่?',
+      actions: [{ action, params }]
+    });
+  });
+}
+
+function confirmPixelAction(confirmed) {
+  if (pixelPendingResolve) {
+    pixelPendingResolve(confirmed);
+    pixelPendingResolve = null;
+  }
+  pixelState.dialogue = pixelState.dialogue.filter(m => m.type !== 'confirm');
+  renderDialogue();
+  if (!confirmed) {
+    addDialogue({ role: 'pixel', type: 'text', text: 'ยกเลิกเรียบร้อย', ts: Date.now() });
+  }
+}
+
+// ============================================================
+// PIXEL SECRETARY — Exercise kcal estimation (fallback)
+// ============================================================
+function estimateExerciseKcal(name, durationMinutes) {
+  const n = (name || '').toLowerCase();
+  const dur = Number(durationMinutes) || 30;
+
+  const rateMap = [
+    { keywords: ['เดิน', 'walk'], rate: 3.67 },
+    { keywords: ['วิ่ง', 'run', 'jog'], rate: 10 },
+    { keywords: ['cardio'], rate: 7.5 },
+    { keywords: ['ปั่น', 'จักรยาน', 'cycle', 'bike'], rate: 8.33 },
+    { keywords: ['ว่าย', 'swim'], rate: 8.33 },
+    { keywords: ['เวท', 'weight', 'ยกน้ำหนัก'], rate: 5 },
+    { keywords: ['โยคะ', 'yoga', 'stretch', 'ยืด'], rate: 3.33 },
+  ];
+
+  let rate = 5;
+  for (const entry of rateMap) {
+    if (entry.keywords.some(k => n.includes(k))) { rate = entry.rate; break; }
+  }
+
+  return Math.round(rate * dur);
+}
+
+// ============================================================
+// PIXEL SECRETARY — Function Registry
+// ============================================================
+const PixelFunctionRegistry = {
+  addMeal: {
+    requiresConfirmation: true,
+    validate: (params) => {
+      if (!params.name) return 'กรุณาระบุชื่ออาหาร';
+      if (!params.kcal || Number(params.kcal) <= 0) return 'กรุณาระบุแคลอรี่';
+      return null;
+    },
+    execute: (params) => {
+      const today = todayStr();
+      const log = getDayLog(today);
+      log.food.push({
+        name: params.name,
+        kcal: Math.round(Number(params.kcal) || 0),
+        protein: Math.round(Number(params.protein) || 0),
+        source: 'pixel',
+        createdAt: Date.now()
+      });
+      saveState();
+      renderKcalPage();
+      return { success: true };
+    }
+  },
+  updateWeight: {
+    requiresConfirmation: true,
+    validate: (params) => {
+      if (!params.weight || Number(params.weight) <= 0) return 'กรุณาระบุน้ำหนัก';
+      return null;
+    },
+    execute: (params) => {
+      const val = Number(params.weight);
+      const prev = state.currentWeight;
+      state.currentWeight = val;
+      upsertWeightLog(todayStr(), val);
+      const newlyReached = state.weightMilestones.filter(m =>
+        val <= m.kg && prev > m.kg && !state.reachedWeightMilestones.includes(m.kg)
+      );
+      newlyReached.forEach(m => state.reachedWeightMilestones.push(m.kg));
+      if (newlyReached.length > 0) {
+        const m = newlyReached.sort((a, b) => a.kg - b.kg)[0];
+        showCelebrate(m.big ? '\uD83C\uDF81' : '\u2B50', `ถึง ${m.kg} กก. แล้ว!`, m.reward);
+      }
+      saveState();
+      render();
+      renderDashboard();
+      return { success: true };
+    }
+  },
+  addExercise: {
+    requiresConfirmation: true,
+    validate: (params) => {
+      if (!params.name) return 'กรุณาระบุชื่อกิจกรรม';
+      return null;
+    },
+    execute: (params) => {
+      const today = todayStr();
+      const log = getDayLog(today);
+      const kcal = Number(params.kcal) || estimateExerciseKcal(params.name, params.durationMinutes);
+      log.exercise.push({
+        name: params.name,
+        kcal: Math.round(kcal),
+        durationMinutes: params.durationMinutes || null,
+        source: 'pixel',
+        createdAt: Date.now()
+      });
+      saveState();
+      renderKcalPage();
+      renderDashboard();
+      return { success: true };
+    }
+  },
+  navigate: {
+    requiresConfirmation: false,
+    validate: (params) => {
+      const pageMap = { home:'Home', wheel:'Wheel', kcal:'Kcal', dashboard:'Dashboard', pixel:'Pixel' };
+      const normalized = pageMap[String(params.page || '').toLowerCase()];
+      if (!normalized) return 'หน้าไม่ถูกต้อง';
+      return null;
+    },
+    execute: (params) => {
+      const pageMap = { home:'Home', wheel:'Wheel', kcal:'Kcal', dashboard:'Dashboard', pixel:'Pixel' };
+      const normalized = pageMap[String(params.page || '').toLowerCase()];
+      if (normalized) switchTab(normalized);
+      return { success: true };
+    }
+  }
+};
+
+// ============================================================
+// PIXEL SECRETARY — Context Providers
+// ============================================================
+function getActivePage() {
+  const active = document.querySelector('.page.active');
+  if (!active) return 'unknown';
+  return active.id.replace('page', '');
+}
+
+function getFoodHistoryData(days) {
+  const result = [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffKey = localDateKeyV2(cutoff);
+  const today = todayStr();
+  const entries = Object.entries(state.kcalDays || {})
+    .filter(([d]) => d >= cutoffKey && d <= today)
+    .sort(([a], [b]) => a.localeCompare(b));
+  for (const [date, day] of entries) {
+    if (day.food && day.food.length) result.push({ date, items: day.food });
+  }
+  return result;
+}
+
+function getExerciseHistoryData(days) {
+  const result = [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffKey = localDateKeyV2(cutoff);
+  const today = todayStr();
+  const entries = Object.entries(state.kcalDays || {})
+    .filter(([d]) => d >= cutoffKey && d <= today)
+    .sort(([a], [b]) => a.localeCompare(b));
+  for (const [date, day] of entries) {
+    if (day.exercise && day.exercise.length) result.push({ date, items: day.exercise });
+  }
+  return result;
+}
+
+// --- Core (always included) ---
+function buildCoreContext(message) {
+  const today = todayStr();
+  const log = getDayLog(today);
+  const totals = dayTotals(today);
+
+  return {
+    contextVersion: 2,
+    message,
+    time: getCurrentTimeContext(),
+    activePage: getActivePage(),
+    user: {
+      profile: state.profile || {},
+      metrics: calcProfileMetrics(),
+      currentWeight: state.currentWeight || null,
+      startWeight: state.startWeight || null,
+      finalGoal: state.finalGoal || null,
+      proteinGoal: state.proteinGoal || 100,
+      streak: state.streak || 0,
+      bestStreak: state.bestStreak || 0,
+    },
+    today: {
+      date: today,
+      baseKcal: totals.base || 0,
+      foodKcal: totals.food || 0,
+      exerciseKcal: totals.exercise || 0,
+      protein: totals.protein || 0,
+      netKcal: totals.net || 0,
+      foods: log.food || [],
+      exercises: log.exercise || [],
+    },
+    availableFunctions: Object.keys(PixelFunctionRegistry),
+  };
+}
+
+// --- Intent Patterns ---
+const intentPatterns = [
+  {
+    intent: 'weight',
+    patterns: [
+      /น้ำหนัก/i, /ลด/i, /เพิ่ม/i, /ผอม/i, /อ้วน/i, /plateau/i,
+      /คงที่/i, /ขึ้น/i, /ลง/i, /เปลี่ยนแปลง/i, /weight/i,
+      /trend/i, /prediction/i, /ลดลง/i, /เพิ่มขึ้น/i, /เปลี่ยน/i,
+      /ไม่ลง/i, /ไม่ลด/i, /ไม่ผอม/i,
+    ],
+    providers: ['weightHistory', 'analytics'],
+  },
+  {
+    intent: 'nutrition',
+    patterns: [
+      /กิน/i, /อาหาร/i, /โปรตีน/i, /แคล/i, /calorie/i, /kcal/i,
+      /มื้อ/i, /ทาน/i, /ดื่ม/i, /น้ำ(?!หนัก)/i, /กินอะไร/i,
+      /เคยกิน/i, /เมื่อวาน/i, /เช้า/i, /กลางวัน/i, /เย็น/i,
+    ],
+    providers: ['foodHistory', 'analytics'],
+  },
+  {
+    intent: 'exercise',
+    patterns: [
+      /วิ่ง/i, /เดิน/i, /cardio/i, /ฟิตเนส/i, /ออกกำลัง/i,
+      /exercise/i, /workout/i, /ขยับ/i, /เล่น/i, /ว่าย/i,
+      /ปั่น/i, /โยคะ/i, /ยิม/i, /เขย่า/i, /健身/i,
+    ],
+    providers: ['exerciseHistory', 'analytics'],
+  },
+  {
+    intent: 'analytics',
+    patterns: [
+      /ทำไม/i, /แนวโน้ม/i, /ช่วงนี้/i, /เดือน/i, /สัปดาห์/i,
+      /อาทิตย์/i, /เปรียบเทียบ/i, /วิเคราะห์/i, /analysis/i,
+      /summary/i, /ภาพรวม/i, /เฉลี่ย/i, /ค่าเฉลี่ย/i,
+      /เมื่อก่อน/i, /ที่ผ่านมา/i, /ก่อนหน้านี้/i, /ที่แล้ว/i,
+      /past/i, /before/i,
+    ],
+    providers: ['analytics', 'weightHistory'],
+  },
+  {
+    intent: 'time',
+    patterns: [
+      /เวลา/i, /วันนี้/i, /วันอะไร/i, /กี่โมง/i, /date/i,
+      /time/i, /ตอนนี้/i, /วันนี้วันอะไร/i,
+    ],
+    providers: [],
+  },
+  {
+    intent: 'greeting',
+    patterns: [
+      /สวัสดี/i, /hello/i, /^hi/i, /thank/i, /ขอบคุณ/i,
+      /หวัดดี/i, /^hey/i, /^good (morning|afternoon|evening)/i,
+    ],
+    providers: [],
+  },
+];
+
+// --- Context Providers ---
+const contextProviders = [
+  {
+    name: 'chatHistory',
+    always: true,
+    build: () => ({ chatHistory: pixelState.chatHistory.slice(-10) }),
+  },
+  {
+    name: 'weightHistory',
+    build: () => ({ weightLogs: state.weightLogs || [] }),
+  },
+  {
+    name: 'analytics',
+    build: () => ({ analytics: buildAiAppAnalyticsV13() }),
+  },
+  {
+    name: 'foodHistory',
+    build: () => ({ foodHistory: getFoodHistoryData(30) }),
+  },
+  {
+    name: 'exerciseHistory',
+    build: () => ({ exerciseHistory: getExerciseHistoryData(30) }),
+  },
+];
+
+// ============================================================
+// PIXEL SECRETARY — Intent Detection
+// ============================================================
+function detectIntents(message) {
+  const matched = new Set();
+  const providers = new Set();
+
+  for (const intent of intentPatterns) {
+    if (intent.patterns.some(p => p.test(message))) {
+      matched.add(intent.intent);
+      for (const p of intent.providers) providers.add(p);
+    }
+  }
+
+  return { intents: [...matched], providers: [...providers] };
+}
+
+// ============================================================
+// PIXEL SECRETARY — Context Assembly
+// ============================================================
+function buildPixelContext(message) {
+  const core = buildCoreContext(message);
+  const { providers: activeProviders } = detectIntents(message);
+
+  for (const provider of contextProviders) {
+    if (provider.always || activeProviders.includes(provider.name)) {
+      const data = provider.build();
+      for (const key of Object.keys(data)) {
+        core[key] = data[key];
+      }
+    }
+  }
+
+  return core;
+}
+
+// ============================================================
+// PIXEL SECRETARY — AI Call
+// ============================================================
+async function callPixelAI(message) {
+  const url = AI_KCAL_WORKER_URL + '/pixel-secretary';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const context = buildPixelContext(message);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(context),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `AI request failed (${res.status})`);
+    }
+
+    const result = await res.json();
+    console.log('[Pixel] Worker response:', JSON.stringify(result, null, 2));
+    return result;
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
+}
+
+// ============================================================
+// PIXEL SECRETARY — Main Handler
+// ============================================================
+async function handlePixelMessage() {
+  const input = document.getElementById('pixelInput');
+  const sendBtn = document.getElementById('pixelSendBtn');
+  const message = input.value.trim();
+  if (!message) return;
+
+  input.value = '';
+  sendBtn.disabled = true;
+  setPixelStatus('thinking');
+  addDialogue({ role: 'user', type: 'text', text: message, ts: Date.now() });
+  clearActivity();
+  startActivity('analyze', 'วิเคราะห์คำขอ...');
+
+  try {
+    const data = await callPixelAI(message);
+    completeActivity('analyze');
+    console.log('[Pixel] Raw AI response:', JSON.stringify(data, null, 2));
+
+    if (data.actions && data.actions.length > 0) {
+      for (const action of data.actions) {
+        console.log('[Pixel] Received action:', JSON.stringify(action));
+        const fn = PixelFunctionRegistry[action.function];
+        if (!fn) {
+          console.warn('[Pixel] Unknown function:', action.function);
+          startActivity(action.function, `ไม่รู้จักคำสั่ง: ${action.function}`);
+          failActivity(action.function);
+          continue;
+        }
+
+        const validationError = fn.validate(action.params);
+        console.log('[Pixel] Validation result:', validationError || 'OK');
+        if (validationError) {
+          startActivity(action.function, validationError);
+          failActivity(action.function);
+          continue;
+        }
+
+        startActivity(action.function, action.label || `กำลังดำเนินการ: ${action.function}`);
+
+        if (fn.requiresConfirmation) {
+          const confirmed = await showConfirmation(action.function, action.params);
+          if (!confirmed) {
+            failActivity(action.function);
+            continue;
+          }
+        }
+
+        console.log('[Pixel] Execute started');
+        try {
+          fn.execute(action.params);
+          console.log('[Pixel] Execute finished');
+          completeActivity(action.function);
+        } catch (err) {
+          console.error('[Pixel] Execute error:', err);
+          failActivity(action.function);
+          addDialogue({ role: 'pixel', type: 'error', text: `เกิดข้อผิดพลาด: ${err.message}`, ts: Date.now() });
+        }
+      }
+    }
+
+    addDialogue({ role: 'pixel', type: 'text', text: data.reply || 'เรียบร้อยค่ะ', ts: Date.now() });
+
+    pixelState.chatHistory.push({ role: 'user', text: message, ts: Date.now() });
+    pixelState.chatHistory.push({ role: 'pixel', text: data.reply, intent: data.intent, actions: data.actions, ts: Date.now() });
+    if (pixelState.chatHistory.length > 30) {
+      pixelState.chatHistory = pixelState.chatHistory.slice(-30);
+    }
+
+    setPixelStatus('done');
+
+  } catch (err) {
+    setPixelStatus('error');
+    addDialogue({ role: 'pixel', type: 'error', text: `ไม่สามารถติดต่อ AI ได้: ${err.message}`, ts: Date.now() });
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
+
+// ============================================================
+// PIXEL SECRETARY — Render & Actions
+// ============================================================
+function renderPixelSecretary() {
+  renderDialogue();
+  renderActivityLog();
+  setPixelStatus(pixelState.status);
+}
+
+function pixelAction(action) {
+  if (action === 'clear') {
+    pixelState.dialogue = [];
+    pixelState.activityLog = [];
+    renderDialogue();
+    renderActivityLog();
+    setPixelStatus('idle');
+  } else if (action === 'help') {
+    addDialogue({ role: 'pixel', type: 'text', text: 'ฉันช่วยคุณได้ดังนี้:\n• บันทึกอาหาร เช่น "กินข้าวมันไก่ 550 kcal"\n• บันทึกน้ำหนัก เช่น "วันนี้หนัก 72.3"\n• บันทึกกิจกรรม เช่น "เดิน 8,000 ก้าว 200 kcal"\n• เปิดหน้าต่าง เช่น "เปิด Dashboard"' });
+  }
+}
+
 setTimeout(() => {
   document.getElementById("dashYearPrevBtn")?.addEventListener("click", () => {
     dashboardYear--;
@@ -3805,6 +4391,13 @@ setTimeout(() => {
 
   document.getElementById("saveProfileBtn")?.addEventListener("click", saveProfileFromInputs);
   document.getElementById("applyProfileBtn")?.addEventListener("click", applyProfileSuggestions);
+}, 0);
+
+setTimeout(() => {
+  const sendBtn = document.getElementById('pixelSendBtn');
+  const input = document.getElementById('pixelInput');
+  if (sendBtn) sendBtn.addEventListener('click', handlePixelMessage);
+  if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePixelMessage(); });
 }, 0);
 
 
@@ -6014,9 +6607,9 @@ document.addEventListener("visibilitychange", function(){
 });
 
 
-const APP_VERSION_V1 = "v1.6.31";
-const APP_BUILD_V1 = "2026.07.15.31";
-const APP_VERSION_NOTE_V1 = "Faster app-aware AI and scrollable high-risk meal details";
+const APP_VERSION_V1 = "v1.7.0";
+const APP_BUILD_V1 = "2026.07.20.1";
+const APP_VERSION_NOTE_V1 = "Pixel Secretary — AI health assistant with Live Context, Intent Resolution, and function calling";
 
 function findHomePageForVersionBadgeV1(){
   const directIds = ["pageHome", "homePage", "pageMain", "mainPage"];
