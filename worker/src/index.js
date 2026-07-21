@@ -9,9 +9,11 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5500",
   "http://localhost:5501",
   "http://localhost:4174",
+  "http://localhost:8080",
   "http://127.0.0.1:5500",
   "http://127.0.0.1:5501",
-  "http://127.0.0.1:4174"
+  "http://127.0.0.1:4174",
+  "http://127.0.0.1:8080"
 ];
 
 function getCorsOrigin(request) {
@@ -71,54 +73,58 @@ function toMacroNumber(value) {
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
+function classifyFood(name) {
+  const lower = String(name || "").toLowerCase();
+  const hasSweetDrink = /ชานม|ชาไทย|น้ำหวาน|น้ำอัดลม|โกโก้|กาแฟหวาน|น้ำผลไม้|หวาน|ไซรัป|นมเย็น/.test(lower);
+  const hasDessert = /เค้ก|ขนม|โดนัท|คุกกี้|ไอศกรีม|บิงซู|บราวนี่|พาย|ครัวซองต์/.test(lower);
+  const hasRice = /ข้าว|ข้าวหุง|ข้าวสวย|ข้าวเปล่า|ข้าวเหนียว/.test(lower);
+  const hasNoodle = /เส้น|ก๋วยเตี๋ยว|บะหมี่|ราเมน|พาสต้า|สปาเกตตี|มาม่า/.test(lower);
+  const hasBread = /ขนมปัง|แซนด์วิช|โรตี|แป้ง|พิซซ่า|เบอร์เกอร์/.test(lower);
+  const hasStarchy = /มันฝรั่ง|มันหวาน|เผือก|ข้าวโพด/.test(lower);
+  const hasVeg = /ผัก|กะหล่ำ|แครอท|บรอก|คะน้า|ผักบุ้ง|สลัด|เห็ด|แตง|มะเขือ/.test(lower);
+  const hasProteinName = /อกไก่|ไก่|หมู|เนื้อ|ปลา|ไข่|เวย์|โปรตีน|เต้าหู้/.test(lower);
+  const proteinOnly = hasProteinName && !(hasRice || hasNoodle || hasBread || hasStarchy || hasSweetDrink || hasDessert);
+  return { hasSweetDrink, hasDessert, hasRice, hasNoodle, hasBread, hasStarchy, hasVeg, hasProteinName, proteinOnly };
+}
+
 function estimateFoodMetabolicFallback(item) {
-  const name = String(item?.name || "").toLowerCase();
   const kcal = toMacroNumber(item?.kcal);
   const protein = toMacroNumber(item?.protein);
-
-  const hasSweetDrink = /ชานม|ชาไทย|น้ำหวาน|น้ำอัดลม|โกโก้|กาแฟหวาน|น้ำผลไม้|หวาน|ไซรัป|นมเย็น/.test(name);
-  const hasDessert = /เค้ก|ขนม|โดนัท|คุกกี้|ไอศกรีม|บิงซู|บราวนี่|พาย|ครัวซองต์/.test(name);
-  const hasRice = /ข้าว|ข้าวหุง|ข้าวสวย|ข้าวเปล่า|ข้าวเหนียว/.test(name);
-  const hasNoodle = /เส้น|ก๋วยเตี๋ยว|บะหมี่|ราเมน|พาสต้า|สปาเกตตี|มาม่า/.test(name);
-  const hasBread = /ขนมปัง|แซนด์วิช|โรตี|แป้ง|พิซซ่า|เบอร์เกอร์/.test(name);
-  const hasStarchy = /มันฝรั่ง|มันหวาน|เผือก|ข้าวโพด/.test(name);
-  const hasVeg = /ผัก|กะหล่ำ|แครอท|บรอก|คะน้า|ผักบุ้ง|สลัด|เห็ด|แตง|มะเขือ/.test(name);
-  const proteinOnly = /อกไก่|ไก่|หมู|เนื้อ|ปลา|ไข่|เวย์|โปรตีน|เต้าหู้/.test(name) &&
-    !(hasRice || hasNoodle || hasBread || hasStarchy || hasSweetDrink || hasDessert);
+  const classification = classifyFood(item?.name);
 
   let carb = 0;
   let sugar = 0;
   let fiber = 0;
 
-  if (hasRice) {
+  if (classification.hasRice) {
     carb = Math.max(carb, Math.round((kcal * 0.88) / 4));
     fiber = Math.max(fiber, 1);
   }
 
-  if (hasNoodle || hasBread || hasStarchy) {
+  if (classification.hasNoodle || classification.hasBread || classification.hasStarchy) {
     carb = Math.max(carb, Math.round((kcal * 0.65) / 4));
-    sugar = Math.max(sugar, hasBread ? 4 : 1);
+    sugar = Math.max(sugar, classification.hasBread ? 4 : 1);
     fiber = Math.max(fiber, 1);
   }
 
-  if (hasVeg) {
+  if (classification.hasVeg) {
     carb = Math.max(carb, Math.min(12, Math.round(Math.max(5, kcal * 0.35 / 4))));
     sugar = Math.max(sugar, 2);
     fiber = Math.max(fiber, 2);
   }
 
-  if (hasSweetDrink) {
+  if (classification.hasSweetDrink) {
     sugar = Math.max(sugar, Math.round((kcal * 0.75) / 4));
     carb = Math.max(carb, sugar);
   }
 
-  if (hasDessert) {
+  if (classification.hasDessert) {
     carb = Math.max(carb, Math.round((kcal * 0.6) / 4));
     sugar = Math.max(sugar, Math.round((kcal * 0.32) / 4));
     fiber = Math.max(fiber, 1);
   }
 
-  if (carb === 0 && kcal > 0 && !proteinOnly) {
+  if (carb === 0 && kcal > 0 && !classification.proteinOnly) {
     const residual = Math.max(0, kcal - protein * 4);
     carb = Math.round((residual * 0.35) / 4);
   }
@@ -127,6 +133,31 @@ function estimateFoodMetabolicFallback(item) {
   fiber = Math.max(0, Math.min(fiber, carb));
 
   return { carb, sugar, fiber };
+}
+
+/**
+ * Heuristic protein estimator.
+ *
+ * NOT intended to provide nutritionally accurate protein values.
+ * Estimates protein only to improve downstream glucose-spike
+ * classification when the AI does not provide protein.
+ *
+ * Fractions are heuristics derived from common Thai meal patterns,
+ * optimized for spike-risk analysis, not nutrition-label accuracy.
+ *
+ * Target accuracy: ~±10g absolute error for common meals.
+ *
+ * If a reliable nutrition database or API becomes available,
+ * replace this estimator with deterministic lookup.
+ */
+function estimateFoodProteinFallback(item) {
+  const classification = classifyFood(item?.name);
+  const kcal = toMacroNumber(item?.kcal);
+  if (kcal <= 0) return 0;
+  if (classification.proteinOnly) return Math.round(kcal * 0.50 / 4);
+  if (classification.hasRice || classification.hasNoodle || classification.hasBread || classification.hasStarchy) return Math.round(kcal * 0.18 / 4);
+  if (classification.hasSweetDrink || classification.hasDessert) return Math.round(kcal * 0.04 / 4);
+  return Math.round(kcal * 0.12 / 4);
 }
 
 function estimateGlucoseSpikeRisk(item) {
@@ -145,6 +176,14 @@ function normalizeMetabolicItems(parsed) {
 
   parsed.items = parsed.items.map(item => {
     if (!item || item.type !== "food") return item;
+
+    if (!toMacroNumber(item.protein)) {
+      const kcal = toMacroNumber(item.kcal);
+      if (kcal > 0) {
+        item.protein = estimateFoodProteinFallback(item);
+        item.proteinEstimated = true;
+      }
+    }
 
     const hasAny =
       item.carb !== undefined ||
@@ -395,6 +434,63 @@ function normalizeAiItemsMacroFieldsV1(items) {
   return items.map((item) => normalizeFoodMacroFieldsV1(item));
 }
 
+function summarizeChatHistory(entries) {
+  if (!entries || entries.length === 0) return '';
+
+  const lines = [];
+  for (const entry of entries) {
+    const text = (entry && entry.text) || '';
+    if (entry.role === 'user') {
+      if (/กิน|อาหาร|kcal|แคล|โปรตีน|มื้อ|ทาน|ดื่ม|recommend|meal|food|calorie/i.test(text)) {
+        lines.push('User discussed food or nutrition.');
+      } else if (/น้ำหนัก|weight|ลด|ผอม|อ้วน|BMI|trend|plateau|ขึ้น|ลง|ไม่ลง|ไม่ลด/i.test(text)) {
+        lines.push('User discussed weight.');
+      } else if (/วิ่ง|เดิน|ออกกำลัง|exercise|workout|cardio|fitness|โยคะ|ว่าย|ปั่น/i.test(text)) {
+        lines.push('User discussed exercise.');
+      } else if (/dashboard|navigate|เปิด|หน้า|switch|page|tab/i.test(text)) {
+        lines.push('User requested page navigation.');
+      } else if (/เวลา|กี่โมง|วันอะไร|date|time|ขอเลขเวลา/i.test(text)) {
+        continue;
+      } else if (/สวัสดี|hello|hi|thank|ขอบคุณ|หวัดดี/i.test(text)) {
+        lines.push('User greeted.');
+      } else {
+        lines.push('User asked a question.');
+      }
+    } else if (entry.role === 'pixel') {
+      const intent = entry.intent || '';
+      const actions = entry.actions || [];
+      const hasAddMeal = actions.some(a => a.function === 'addMeal');
+      const hasUpdateWeight = actions.some(a => a.function === 'updateWeight');
+      const hasAddExercise = actions.some(a => a.function === 'addExercise');
+      const hasNavigate = actions.some(a => a.function === 'navigate');
+
+      if (intent === 'log_food' || hasAddMeal) {
+        lines.push('Food entry was logged.');
+      } else if (intent === 'log_weight' || hasUpdateWeight) {
+        lines.push('Weight was recorded.');
+      } else if (intent === 'log_exercise' || hasAddExercise) {
+        lines.push('Exercise entry was logged.');
+      } else if (intent === 'navigate' || hasNavigate) {
+        lines.push('Page was navigated.');
+      } else if (intent === 'clarify') {
+        lines.push('Assistant asked for clarification.');
+      } else if (intent === 'greeting') {
+        lines.push('Assistant greeted the user.');
+      } else {
+        if (/แนะนำ|ควร|น่าจะ|option|choice|recipe|menu/i.test(text)) {
+          lines.push('Assistant provided recommendations.');
+        } else if (/วิเคราะห์|analysis|trend|แนวโน้ม|เปรียบเทียบ/i.test(text)) {
+          lines.push('Assistant provided analysis.');
+        } else {
+          lines.push('Assistant responded.');
+        }
+      }
+    }
+  }
+
+  return lines.filter((line, i) => i === 0 || line !== lines[i - 1]).map(l => '- ' + l).join('\n');
+}
+
 async function handlePixelSecretary(request, env) {
   const origin = request.headers.get("Origin") || "";
 
@@ -412,6 +508,11 @@ async function handlePixelSecretary(request, env) {
     const exerciseHistory = Array.isArray(body.exerciseHistory) ? body.exerciseHistory : [];
     const availableFunctions = Array.isArray(body.availableFunctions) ? body.availableFunctions : [];
     const chatHistory = Array.isArray(body.chatHistory) ? body.chatHistory.slice(-10) : [];
+    const cleanChatHistory = chatHistory.map(({ ts, ...rest }) => rest);
+    const summarizedHistory = summarizeChatHistory(cleanChatHistory);
+    const chatHistorySection = summarizedHistory
+      ? `\n📋 Recent Conversation Summary\n${summarizedHistory}`
+      : '';
     const contextVersion = body.contextVersion || 1;
 
     if (!message) {
@@ -479,13 +580,14 @@ ${JSON.stringify(foodHistory)}
 🏃 Exercise History (past 30 days)
 ${JSON.stringify(exerciseHistory)}
 ` : ""}
-💬 Recent Chat History
-${JSON.stringify(chatHistory)}
+=== RULES ===
+The LIVE CONTEXT above represents the current application state, date, and time. When answering questions about the current time, today's data, or any live application state, rely on this context as the authoritative source.
 
-=== YOUR RULES ===
-- Always use the LIVE CONTEXT above to answer. Do not rely on general knowledge or assumptions.
-- Analyze the user's message and determine the best response and/or actions.
-- For write operations (logging food, weight, exercise), include the function name and params in actions[].
+The user's latest message determines the current intent and response scope. Evaluate it independently — do not extend the previous conversation topic forward unless the user explicitly references it. If the latest message asks a simple factual question (time, date, etc.), answer it directly without adding unsolicited advice.
+
+- Analyze what the user is asking in their latest message and determine the best response and/or actions.
+- For write operations (logging food, weight, exercise), include complete action details in actions[]. Each function expects specific params — populate them from the user's message and context.
+- Incomplete actions are silently rejected — they will NOT execute. If the user hasn't provided enough information for a required field, ask a clarification question instead of emitting an incomplete action.
 - For read-only requests (questions, analytics, navigation), set actions to [].
 - If intent is unclear, set intent to "clarify" and ask a follow-up question.
 - Always reply in Thai, short and natural.
@@ -501,6 +603,8 @@ ${JSON.stringify(chatHistory)}
   - Yoga/Stretching 30 min ≈ 100 kcal
   - Default: 5 kcal per minute
 
+${chatHistorySection}
+
 === OUTPUT FORMAT ===
 Respond with ONLY valid JSON. No markdown, no code fences, no extra text.
 
@@ -509,10 +613,11 @@ Required JSON structure:
   "intent": "one of: log_food, log_weight, log_exercise, navigate, chat, clarify, mixed",
   "reply": "short Thai reply explaining what was done or answering the question",
   "plan": [ { "step": "action_id", "label": "Thai label" } ],
-  "actions": [ { "function": "fn_name", "params": {}, "label": "Thai label" } ]
+  "actions": [ { "function": "fn_name", "params": { }, "label": "Thai label" } ]
 }
 - plan MUST always be an array (use [] if none)
 - actions MUST always be an array (use [] if none)
+- params MUST contain the fields each function expects — see examples below for each function's expected params.
 
 Examples:
 
@@ -570,9 +675,43 @@ JSON:
   "actions": []
 }
 
-User message:
+User: บันทึกการออกกำลังกาย
+JSON:
+{
+  "intent": "clarify",
+  "reply": "ต้องการบันทึกการออกกำลังกายแบบไหนคะ เช่น เดิน วิ่ง หรือคาร์ดิโอ? และกี่นาทีคะ?",
+  "plan": [],
+  "actions": []
+}
+
+User: ตอนนี้กี่โมง
+JSON:
+{
+  "intent": "chat",
+  "reply": "ตอนนี้ 21:26 น. ค่ะ",
+  "plan": [],
+  "actions": []
+}
+
+Respond to the user's latest message:
+
 ${message}
 `;
+
+    console.log('[Pixel] === FULL PROMPT START ===');
+    console.log('[Pixel] Prompt length:', prompt.length, 'chars');
+    console.log('[Pixel] Prompt body:', prompt);
+    console.log('[Pixel] === FULL PROMPT END ===');
+    console.log('[Pixel] Time block:', JSON.stringify({
+      displayDate: time.displayDate,
+      displayTime: time.displayTime,
+      timezone: time.timezone,
+      weekday: time.weekday,
+      dayPart: time.dayPart,
+    }));
+    console.log('[Pixel] [EXPERIMENT] Summarized history:', summarizedHistory || '(empty)');
+    console.log('[Pixel] [EXPERIMENT] Full transcript for comparison:', JSON.stringify(cleanChatHistory));
+    console.log('[Pixel] Final user message:', message);
 
     const fallbackResult = await callGeminiWithFallback(prompt, env, isValidPixelSecretaryJson);
 

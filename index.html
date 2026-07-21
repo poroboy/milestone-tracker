@@ -471,7 +471,7 @@
     </div>
   </div>
 
-  <div style="height:80px;"></div>
+  <div class="pixel-spacer"></div>
 </div>
 </div>
 
@@ -3972,13 +3972,17 @@ const PixelFunctionRegistry = {
     execute: (params) => {
       const today = todayStr();
       const log = getDayLog(today);
-      log.food.push({
+      const item = {
         name: params.name,
         kcal: Math.round(Number(params.kcal) || 0),
         protein: Math.round(Number(params.protein) || 0),
         source: 'pixel',
         createdAt: Date.now()
-      });
+      };
+      if (typeof normalizeFoodMetabolicItem === 'function') {
+        normalizeFoodMetabolicItem(item);
+      }
+      log.food.push(item);
       saveState();
       renderKcalPage();
       return { success: true };
@@ -4297,6 +4301,10 @@ async function handlePixelMessage() {
     completeActivity('analyze');
     console.log('[Pixel] Raw AI response:', JSON.stringify(data, null, 2));
 
+    let successCount = 0;
+    let nonSuccessCount = 0;
+    let firstFailMessage = '';
+
     if (data.actions && data.actions.length > 0) {
       for (const action of data.actions) {
         console.log('[Pixel] Received action:', JSON.stringify(action));
@@ -4305,6 +4313,8 @@ async function handlePixelMessage() {
           console.warn('[Pixel] Unknown function:', action.function);
           startActivity(action.function, `ไม่รู้จักคำสั่ง: ${action.function}`);
           failActivity(action.function);
+          nonSuccessCount++;
+          if (!firstFailMessage) firstFailMessage = `ไม่รู้จักคำสั่ง: ${action.function}`;
           continue;
         }
 
@@ -4313,6 +4323,8 @@ async function handlePixelMessage() {
         if (validationError) {
           startActivity(action.function, validationError);
           failActivity(action.function);
+          nonSuccessCount++;
+          if (!firstFailMessage) firstFailMessage = validationError;
           continue;
         }
 
@@ -4322,6 +4334,7 @@ async function handlePixelMessage() {
           const confirmed = await showConfirmation(action.function, action.params);
           if (!confirmed) {
             failActivity(action.function);
+            nonSuccessCount++;
             continue;
           }
         }
@@ -4331,15 +4344,25 @@ async function handlePixelMessage() {
           fn.execute(action.params);
           console.log('[Pixel] Execute finished');
           completeActivity(action.function);
+          successCount++;
         } catch (err) {
           console.error('[Pixel] Execute error:', err);
           failActivity(action.function);
-          addDialogue({ role: 'pixel', type: 'error', text: `เกิดข้อผิดพลาด: ${err.message}`, ts: Date.now() });
+          nonSuccessCount++;
+          if (!firstFailMessage) firstFailMessage = `เกิดข้อผิดพลาด: ${err.message}`;
         }
       }
     }
 
-    addDialogue({ role: 'pixel', type: 'text', text: data.reply || 'เรียบร้อยค่ะ', ts: Date.now() });
+    if (data.actions && data.actions.length > 0 && nonSuccessCount > 0) {
+      if (successCount === 0 && firstFailMessage) {
+        addDialogue({ role: 'pixel', type: 'text', text: firstFailMessage, ts: Date.now() });
+      } else if (successCount > 0) {
+        addDialogue({ role: 'pixel', type: 'text', text: `บันทึกบางรายการสำเร็จ ${successCount}/${data.actions.length}`, ts: Date.now() });
+      }
+    } else {
+      addDialogue({ role: 'pixel', type: 'text', text: data.reply || 'เรียบร้อยค่ะ', ts: Date.now() });
+    }
 
     pixelState.chatHistory.push({ role: 'user', text: message, ts: Date.now() });
     pixelState.chatHistory.push({ role: 'pixel', text: data.reply, intent: data.intent, actions: data.actions, ts: Date.now() });
@@ -5305,62 +5328,66 @@ function renderHighSpikeMealListV14(container, meals){
 }
 
 
+function classifyFood(name){
+  const lower = String(name || "").toLowerCase();
+  const hasSweetDrink = /ชานม|ชาไทย|น้ำหวาน|น้ำอัดลม|โกโก้|กาแฟหวาน|น้ำผลไม้|หวาน|ไซรัป|นมเย็น/.test(lower);
+  const hasDessert = /เค้ก|ขนม|โดนัท|คุกกี้|ไอศกรีม|บิงซู|บราวนี่|พาย|ครัวซองต์/.test(lower);
+  const hasRice = /ข้าว|ข้าวหุง|ข้าวสวย|ข้าวเปล่า|ข้าวเหนียว/.test(lower);
+  const hasNoodle = /เส้น|ก๋วยเตี๋ยว|บะหมี่|ราเมน|พาสต้า|สปาเกตตี|มาม่า/.test(lower);
+  const hasBread = /ขนมปัง|แซนด์วิช|โรตี|แป้ง|พิซซ่า|เบอร์เกอร์/.test(lower);
+  const hasStarchy = /มันฝรั่ง|มันหวาน|เผือก|ข้าวโพด/.test(lower);
+  const hasVeg = /ผัก|กะหล่ำ|แครอท|บรอก|คะน้า|ผักบุ้ง|สลัด|เห็ด|แตง|มะเขือ/.test(lower);
+  const hasProteinName = /อกไก่|ไก่|หมู|เนื้อ|ปลา|ไข่|เวย์|โปรตีน|เต้าหู้/.test(lower);
+  const proteinOnly = hasProteinName && !(hasRice || hasNoodle || hasBread || hasStarchy || hasSweetDrink || hasDessert);
+  return { hasSweetDrink, hasDessert, hasRice, hasNoodle, hasBread, hasStarchy, hasVeg, hasProteinName, proteinOnly };
+}
+
 function estimateFoodMetabolicFallback(food){
-  const name = String(food?.name || "").toLowerCase();
   const kcal = toMacroNumber(food?.kcal);
   const protein = toMacroNumber(food?.protein);
-
-  const hasSweetDrink = /ชานม|ชาไทย|น้ำหวาน|น้ำอัดลม|โกโก้|กาแฟหวาน|น้ำผลไม้|หวาน|ไซรัป|นมเย็น/.test(name);
-  const hasDessert = /เค้ก|ขนม|โดนัท|คุกกี้|ไอศกรีม|บิงซู|บราวนี่|พาย|ครัวซองต์/.test(name);
-  const hasRice = /ข้าว|ข้าวหุง|ข้าวสวย|ข้าวเปล่า|ข้าวเหนียว/.test(name);
-  const hasNoodle = /เส้น|ก๋วยเตี๋ยว|บะหมี่|ราเมน|พาสต้า|สปาเกตตี|มาม่า/.test(name);
-  const hasBread = /ขนมปัง|แซนด์วิช|โรตี|แป้ง|พิซซ่า|เบอร์เกอร์/.test(name);
-  const hasStarchy = /มันฝรั่ง|มันหวาน|เผือก|ข้าวโพด/.test(name);
-  const hasVeg = /ผัก|กะหล่ำ|แครอท|บรอก|คะน้า|ผักบุ้ง|สลัด|เห็ด|แตง|มะเขือ/.test(name);
-  const proteinOnly = /อกไก่|ไก่|หมู|เนื้อ|ปลา|ไข่|เวย์|โปรตีน|เต้าหู้/.test(name) &&
-                      !(hasRice || hasNoodle || hasBread || hasStarchy || hasSweetDrink || hasDessert);
+  const classification = classifyFood(food?.name);
 
   let carb = 0;
   let sugar = 0;
   let fiber = 0;
 
-  if(proteinOnly){
+  if(classification.proteinOnly){
     carb = 0;
     sugar = 0;
     fiber = 0;
   }
 
-  if(hasRice){
+  if(classification.hasRice){
     carb = Math.max(carb, Math.round((kcal * 0.88) / 4));
     sugar = Math.max(sugar, 0);
     fiber = Math.max(fiber, 1);
   }
 
-  if(hasNoodle || hasBread || hasStarchy){
+  if(classification.hasNoodle || classification.hasBread || classification.hasStarchy){
     carb = Math.max(carb, Math.round((kcal * 0.65) / 4));
-    sugar = Math.max(sugar, hasBread ? 4 : 1);
+    sugar = Math.max(sugar, classification.hasBread ? 4 : 1);
     fiber = Math.max(fiber, 1);
   }
 
-  if(hasVeg){
+  if(classification.hasVeg){
     carb = Math.max(carb, Math.min(12, Math.round(Math.max(5, kcal * 0.35 / 4))));
     sugar = Math.max(sugar, 2);
     fiber = Math.max(fiber, 2);
   }
 
-  if(hasSweetDrink){
+  if(classification.hasSweetDrink){
     sugar = Math.max(sugar, Math.round((kcal * 0.75) / 4));
     carb = Math.max(carb, sugar);
     fiber = Math.max(fiber, 0);
   }
 
-  if(hasDessert){
+  if(classification.hasDessert){
     carb = Math.max(carb, Math.round((kcal * 0.6) / 4));
     sugar = Math.max(sugar, Math.round((kcal * 0.32) / 4));
     fiber = Math.max(fiber, 1);
   }
 
-  if(carb === 0 && kcal > 0 && !proteinOnly){
+  if(carb === 0 && kcal > 0 && !classification.proteinOnly){
     const residual = Math.max(0, kcal - protein * 4);
     carb = Math.round((residual * 0.35) / 4);
   }
@@ -5372,12 +5399,43 @@ function estimateFoodMetabolicFallback(food){
   return { carb, sugar, fiber };
 }
 
-
+/**
+ * Heuristic protein estimator.
+ *
+ * NOT intended to provide nutritionally accurate protein values.
+ * Estimates protein only to improve downstream glucose-spike
+ * classification when the AI does not provide protein.
+ *
+ * Fractions are heuristics derived from common Thai meal patterns,
+ * optimized for spike-risk analysis, not nutrition-label accuracy.
+ *
+ * Target accuracy: ~±10g absolute error for common meals.
+ *
+ * If a reliable nutrition database or API becomes available,
+ * replace this estimator with deterministic lookup.
+ */
+function estimateFoodProteinFallback(food){
+  const classification = classifyFood(food?.name);
+  const kcal = toMacroNumber(food?.kcal);
+  if(kcal <= 0) return 0;
+  if(classification.proteinOnly) return Math.round(kcal * 0.50 / 4);
+  if(classification.hasRice || classification.hasNoodle || classification.hasBread || classification.hasStarchy) return Math.round(kcal * 0.18 / 4);
+  if(classification.hasSweetDrink || classification.hasDessert) return Math.round(kcal * 0.04 / 4);
+  return Math.round(kcal * 0.12 / 4);
+}
 
 function normalizeFoodMetabolicItem(food){
   if(!food || typeof food !== "object") return food;
 
   const next = food;
+
+  if(!toMacroNumber(next.protein)){
+    const kcal = toMacroNumber(next.kcal);
+    if(kcal > 0){
+      next.protein = estimateFoodProteinFallback(next);
+      next.proteinEstimated = true;
+    }
+  }
 
   const existingCarb = next.carb ?? next.carbs ?? next.carbohydrate;
   const existingSugar = next.sugar;
