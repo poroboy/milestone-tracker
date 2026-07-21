@@ -68,9 +68,10 @@ See [Pixel Secretary Architecture](#pixel-secretary-architecture) below.
 
 ### Glucose / Insulin Insight
 
-- Estimated carb, sugar, and fiber for food logs
-- Daily carb and sugar totals
+- Estimated carb, sugar, fiber, and protein for food logs
+- Daily carb, sugar, and protein totals
 - Glucose spike risk estimation (low/medium/high)
+- Deterministic nutrition enrichment via classifyFood() normalization pipeline
 - *Not a medical measurement*
 
 ### Account & Cloud Sync
@@ -105,6 +106,8 @@ Gemini API
     ↓  structured JSON response
 Function Calling
     ↓  validate → confirm → execute
+Nutrition Enrichment
+    ↓  normalizeFoodMetabolicItem → classifyFood → estimate macros
 State Update
     ↓  saveState → re-render → sync
 ```
@@ -174,6 +177,32 @@ The Cloudflare Worker at `worker/src/index.js`:
 
 The Worker is **stateless** — all user state lives on the frontend.
 
+### Nutrition Enrichment Pipeline
+
+Food items logged through Pixel Secretary are enriched with complete nutrition data before persistence:
+
+```
+AI identifies food (name, kcal)
+  ↓
+normalizeFoodMetabolicItem()
+  ├── classifyFood(name)          → shared food classification
+  ├── estimateFoodProteinFallback → heuristic protein estimation
+  ├── estimateFoodMetabolicFallback → carb/sugar/fiber estimation
+  └── estimateGlucoseSpikeRisk    → spike risk classification
+  ↓
+Item persisted with complete fields: carb, sugar, fiber, protein, spikeRisk
+```
+
+Key architectural decisions:
+
+- **classifyFood(name)** — single source of truth for food classification patterns (rice, noodle, bread, meat, dessert, drink, vegetable). Both the carb/sugar/fiber estimator and protein estimator consume the same classification, preventing regex drift.
+
+- **Heuristic protein estimator** — uses kcal % fractions (50%, 18%, 4%, 12%) optimized for spike-risk classification, not nutrition-label accuracy. Target: ±10g absolute error for common Thai meals. Replaceable with a nutrition database lookup if one becomes available.
+
+- **Deterministic enrichment** — the AI only needs to identify the food name and estimate kcal. All macro fields (carb, sugar, fiber, protein) and spike risk are derived from the name + kcal, making the system self-contained and resilient to AI omissions.
+
+- **Frontend/Worker synchronized** — both `index.html` and `worker/src/index.js` contain identical copies of `classifyFood()` and the normalization pipeline, ensuring consistent enrichment regardless of which path logs the food.
+
 ---
 
 ## Tech Stack
@@ -204,11 +233,17 @@ milestone-tracker/
 │   ├── wrangler.toml          # Cloudflare configuration
 │   └── src/
 │       └── index.js           # Worker — Gemini proxy + prompt assembly
-├── README.md                  # This file
-├── CHANGELOG.md               # Release history
-├── PROJECT_CONTEXT.md         # AI handoff document
-├── AI_Pixel_Secretary_Vision.md           # Original specification (historical)
-├── AI_Pixel_Secretary_Implementation_Plan.md  # Implementation plan (historical)
+├── docs/
+│   ├── README.md              # This file — project documentation
+│   ├── CHANGELOG.md           # Release history
+│   ├── PROJECT_CONTEXT.md     # AI handoff document
+│   ├── CHATGPT_CONTEXT.md     # ChatGPT development context
+│   ├── CHATGPT_HISTORY.md     # Development history and decisions
+│   ├── DECISIONS.md           # Architectural decision log
+│   ├── AI_RULES_v4.1.md       # AI coding agent rules
+│   └── reports/               # Investigation reports
+│       ├── nutrition-enrichment-investigation.md
+│       └── protein-estimation-investigation.md
 ├── .firebaserc                # Firebase project config
 ├── firebase.json              # Firebase hosting config
 └── firestore.rules            # Firestore security rules
