@@ -1,7 +1,9 @@
-const CACHE_NAME = "milestone-tracker-v1.6.31";
+// Must be bumped on every release to invalidate old caches.
+const CACHE_NAME = "milestone-tracker-v1.8.0";
 const APP_SHELL = [
   "./",
   "./index.html",
+  "./styles.css",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
